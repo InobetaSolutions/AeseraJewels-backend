@@ -37,5 +37,16 @@ router.get('/getAllPayments', paymentController.getAllPayments);
 router.post('/approve-payment', paymentController.approvePayment);
 router.post('/getpaymenthistory', paymentController.getPaymentHistory);
 
+// List all files in uploads directory
+const fs = require('fs');
+router.get('/uploads', (req, res) => {
+	fs.readdir('uploads', (err, files) => {
+		if (err) {
+			return res.status(500).json({ error: 'Unable to list files.' });
+		}
+		res.json({ files });
+	});
+});
+
 
 module.exports = router;
