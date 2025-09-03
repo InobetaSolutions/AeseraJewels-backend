@@ -70,11 +70,12 @@ exports.generateOtp = async (req, res) => {
   otpStore[mobile] = otp;
   const token = jwt.sign({ mobile, name: user.name }, process.env.JWT_SECRET || 'secretkey', { expiresIn: '48h' });
   const refreshToken = jwt.sign({ mobile, name: user.name }, process.env.JWT_REFRESH_SECRET || 'refreshsecretkey', { expiresIn: '7d' });
-  res.json({ mobile, otp, token, refreshToken });
+  res.json({ name:user.name || name, mobile, otp, token, refreshToken });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }
 };
+
 
 exports.verifyOtp = (req, res) => {
   const { mobile, otp } = req.body;
