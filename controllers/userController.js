@@ -1,3 +1,5 @@
+
+const User = require('../models/User');
 // Get all users
 exports.getAllUsers = async (req, res) => {
   try {
@@ -15,10 +17,13 @@ exports.getAllUsers = async (req, res) => {
     res.status(500).json({ error: 'Server error.' });
   }
 };
-const User = require('../models/User');
 // User login: check if mobile exists, return OTP and JWT if found
 exports.userLogin = async (req, res) => {
   const { mobile } = req.body;
+  // const mobileExist = await User.findOne({ mobile });
+  // if (mobileExist) {
+  //   return res.status(409).json({ error: 'Mobile number already exists.' });
+  // }
   if (!mobile) {
     return res.status(400).json({ error: 'Mobile is required.' });
   }
@@ -27,10 +32,11 @@ exports.userLogin = async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'Mobile Number not Register. Please Follow Sign up Process.' });
     }
-    const otp = generateRandomOtp();
-    otpStore[mobile] = otp;
-    const token = jwt.sign({ mobile, name: user.name }, process.env.JWT_SECRET || 'secretkey', { expiresIn: '1h' });
-    return res.json({ mobile, otp, token });
+  const otp = generateRandomOtp();
+  otpStore[mobile] = otp;
+  const token = jwt.sign({ mobile, name: user.name }, process.env.JWT_SECRET || 'secretkey', { expiresIn: '1h' });
+  const refreshToken = jwt.sign({ mobile, name: user.name }, process.env.JWT_REFRESH_SECRET || 'refreshsecretkey', { expiresIn: '7d' });
+  return res.json({ mobile, otp, token, refreshToken });
   } catch (err) {
     return res.status(500).json({ error: 'Server error.' });
   }
@@ -47,6 +53,10 @@ const otpStore = {};
 
 exports.generateOtp = async (req, res) => {
   const { mobile, name } = req.body;
+  const mobileExist = await User.findOne({ mobile });
+  if (mobileExist) {
+    return res.status(409).json({ error: 'Mobile number already exists.' });
+  }
   if (!mobile || !name) {
     return res.status(400).json({ error: 'Mobile and Name are required.' });
   }
@@ -56,10 +66,11 @@ exports.generateOtp = async (req, res) => {
       user = new User({ mobile, name });
       await user.save();
     }
-    const otp = generateRandomOtp();
-    otpStore[mobile] = otp;
-    const token = jwt.sign({ mobile, name: user.name }, process.env.JWT_SECRET || 'secretkey', { expiresIn: '1h' });
-    res.json({ mobile, otp, token });
+  const otp = generateRandomOtp();
+  otpStore[mobile] = otp;
+  const token = jwt.sign({ mobile, name: user.name }, process.env.JWT_SECRET || 'secretkey', { expiresIn: '48h' });
+  const refreshToken = jwt.sign({ mobile, name: user.name }, process.env.JWT_REFRESH_SECRET || 'refreshsecretkey', { expiresIn: '7d' });
+  res.json({ mobile, otp, token, refreshToken });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }
@@ -104,4 +115,20 @@ exports.verifyOtp = (req, res) => {
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired JWT.' });
   }
+};
+
+
+//resend otp
+
+exports.resendOtp = async (req, res) => {
+  const { mobile } = req.body;
+  if (!mobile) {
+    return res.status(400).json({ error: 'Mobile is required.' });
+  }
+  // Generate new OTP and store in memory
+  const otp = Math.floor(1000 + Math.random() * 9000).toString();
+  otpStore[mobile] = otp;
+    const jwt = require('jsonwebtoken');
+    const token = jwt.sign({ mobile }, process.env.JWT_SECRET || 'secretkey', { expiresIn: '1h' });
+    res.json({ mobile, otp, token, message: 'OTP resent' });
 };
