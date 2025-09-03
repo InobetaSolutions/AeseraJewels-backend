@@ -110,7 +110,7 @@ exports.approvePayment = async (req, res) => {
     if (!id) {
       return res.status(400).json({ error: 'Payment id is required.' });
     }
-  let payment = await Payment.findOne({ _id: id, status: 'Pending' });
+  let payment = await Payment.findOne({ _id: id, status: "Pending" });
     if (!payment) {
       return res.status(404).json({ error: 'No pending payment found for this id.' });
     }
@@ -239,7 +239,7 @@ exports.mobilePayment = async (req, res) => {
       gram_allocated,
       gram,
       amount_allocated,
-      status: 'pending',
+      status: 'Pending',
       timestamp: new Date(),
       paid_by: req.user?.mobile
     };
