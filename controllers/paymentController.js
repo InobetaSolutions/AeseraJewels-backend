@@ -11,6 +11,7 @@ exports.getByUserAllotment = async (req, res) => {
     const payments = await Payment.find({ mobile });
     const totalAmountRaw = payments.reduce((sum, p) => sum + (p.amount || 0) + (p.amount_allocated || 0), 0);
     const totalGramsRaw = payments.reduce((sum, p) => sum + (p.gram || 0) + (p.gram_allocated || 0), 0);
+    console.log('Total Amount Raw:', totalAmountRaw, 'Total Grams Raw:', totalGramsRaw);
     // For each allotment, calculate proportional amount reduced
     const allotmentsWithAmount = allotments.map(a => {
       let amountReduced = 0;
@@ -73,7 +74,12 @@ exports.getFullPayment = async (req, res) => {
       const totalGramsFinal = totalGramsRaw - totalAllotted;
       // Proportionally reduce totalAmount
       const totalAmount = totalGramsRaw > 0 ? (totalAmountRaw * totalGramsFinal) / totalGramsRaw : 0;
-      results.push({ mobile, totalAmount, totalGrams: totalGramsFinal });
+      // results.push({ mobile, totalAmount, totalGrams: totalGramsFinal });
+      results.push({
+        mobile,
+        totalAmount: Number(totalAmount.toFixed(2)), // 2 decimals for money
+        totalGrams: Number(totalGramsFinal.toFixed(3)), // 3 decimals for grams
+      });
     }
     res.json({ summary: results });
   } catch (err) {
@@ -88,7 +94,12 @@ exports.getPaymentHistory = async (req, res) => {
       return res.status(400).json({ error: 'Mobile is required.' });
     }
   const payments = await Payment.find({ mobile }).sort({ timestamp: -1 });
-  const totalAmountRaw = payments.reduce((sum, p) => sum + (p.amount || 0) + (p.amount_allocated || 0), 0);
+    // const totalAmountRaw = payments.reduce((sum, p) => sum + (p.amount || 0) + (p.amount_allocated || 0), 0);
+    const totalAmountRaw = payments.reduce(
+      (sum, p) => sum + (p.amount || 0),
+      0
+    );
+
   const totalGramsRaw = payments.reduce((sum, p) => sum + (p.gram || 0) + (p.gram_allocated || 0), 0);
   // Subtract allotted grams
   const Allotment = require('../models/Allotment');
@@ -160,15 +171,41 @@ exports.createPayment = async (req, res) => {
 };
 
 // Get all payments
+// exports.getAllPayments = async (req, res) => {
+//   try {
+//   const payments = await Payment.find().sort({ timestamp: -1 });
+//   const formatted = payments.map(p => ({ ...p._doc, gold: p.gold || 0 }));
+//   res.json(formatted);
+//   } catch (err) {
+//     res.status(500).json({ error: 'Server error.' });
+//   }
+// };
 exports.getAllPayments = async (req, res) => {
   try {
-  const payments = await Payment.find().sort({ timestamp: -1 });
-  const formatted = payments.map(p => ({ ...p._doc, gold: p.gold || 0 }));
-  res.json(formatted);
+    const payments = await Payment.aggregate([
+      { $sort: { timestamp: -1 } },
+      {
+        $lookup: {
+          from: "users", // collection name in MongoDB (lowercase + plural)
+          localField: "mobile",
+          foreignField: "mobile",
+          as: "user",
+        },
+      },
+      {
+        $addFields: {
+          name: { $arrayElemAt: ["$user.name", 0] },
+        },
+      },
+      { $project: { user: 0 } }, // hide user array
+    ]);
+
+    res.json(payments.map((p) => ({ ...p, gold: p.gold || 0 })));
   } catch (err) {
-    res.status(500).json({ error: 'Server error.' });
+    res.status(500).json({ error: "Server error." });
   }
 };
+
 // const GoldPrice = require('../models/GoldPrice');
 
 exports.convertGramToAmount = async (req, res) => {
@@ -246,7 +283,13 @@ exports.mobilePayment = async (req, res) => {
     // Calculate running total for the storage mobile
     const Payment = require('../models/Payment');
     const previousPayments = await Payment.find({ mobile: storeMobile });
-    const runningTotal = previousPayments.reduce((sum, p) => sum + (p.amount || 0) + (p.amount_allocated || 0), 0) + Number(amount || 0) + Number(amount_allocated || 0);
+    // const runningTotal = previousPayments.reduce((sum, p) => sum + (p.amount || 0) + (p.amount_allocated || 0), 0) + Number(amount || 0) + Number(amount_allocated || 0);
+    const runningTotal =
+      previousPayments.reduce((sum, p) => sum + (p.amount || 0), 0) +
+      Number(amount || 0);
+
+    // paymentData.totalAmount = runningTotal;
+
     paymentData.totalAmount = runningTotal;
     const payment = new Payment(paymentData);
     await payment.save();
