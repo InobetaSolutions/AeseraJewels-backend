@@ -1,3 +1,12 @@
+// Get product count
+exports.getProductCount = async (req, res) => {
+  try {
+    const count = await Product.countDocuments();
+    res.json({ count });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+};
 const Product = require('../models/Product');
 
 // Create a new product (accepts form-data, image as file)
@@ -15,13 +24,13 @@ exports.createProduct = async (req, res) => {
       return res.status(400).json({ error: 'Image, tagid, and price are required.' });
     }
     // Check for duplicate tagid
-    const existingProduct = await Product.findOne({ tagid });
-    if (existingProduct) {
-      if (image) {
-        fs.unlink(path.join('uploads', image), () => {});
-      }
-      return res.status(409).json({ error: 'Product already exists in database.' });
-    }
+    // const existingProduct = await Product.findOne({ tagid });
+    // if (existingProduct) {
+    //   if (image) {
+    //     fs.unlink(path.join('uploads', image), () => {});
+    //   }
+    //   return res.status(409).json({ error: 'Product already exists in database.' });
+    // }
     const product = new Product({ image, tagid, description, goldtype, price });
     await product.save();
     res.status(201).json(product);

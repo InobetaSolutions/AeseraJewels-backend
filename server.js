@@ -7,9 +7,13 @@ const connectDB = require('./config/database.config');
 // Connect to MongoDB
 connectDB();
 
+const cors = require('cors');
+app.use(cors());
+
 
 // Start gold price cron job
 require('./goldrate.cron');
+app.use('/api/uploads', express.static('uploads'));
 
 app.use(express.json());
 app.use('/api', apiRoutes);
