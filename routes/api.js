@@ -29,7 +29,11 @@ const storage = multer.diskStorage({
 	}
 });
 const upload = multer({ storage });
+const supportController = require("../controllers/supportController");
 
+router.post("/createSupport", supportController.createSupport);
+router.post("/getSupport", supportController.getSupport);
+router.post("/getSupportById/:id", supportController.getSupportById);
 // On-Boarding STARTS
 router.post('/user-login', userController.userLogin);
 router.post('/generate-otp', userController.generateOtp);
@@ -45,7 +49,7 @@ router.get('/get-products', productController.getProducts);
 // App DashBoard ENDS
 
 // App Payment STARTS
-router.post('/create-payment', auth, paymentController.createPayment);
+// router.post('/create-payment', auth, paymentController.createPayment);
 router.post('/getpaymenthistory',auth, paymentController.getPaymentHistory);
 router.post('/convert-gram-to-amount', paymentController.convertGramToAmount);
 router.post('/newPayment', auth, paymentController.mobilePayment);
