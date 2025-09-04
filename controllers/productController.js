@@ -23,14 +23,7 @@ exports.createProduct = async (req, res) => {
       }
       return res.status(400).json({ error: 'Image, tagid, and price are required.' });
     }
-    // Check for duplicate tagid
-    // const existingProduct = await Product.findOne({ tagid });
-    // if (existingProduct) {
-    //   if (image) {
-    //     fs.unlink(path.join('uploads', image), () => {});
-    //   }
-    //   return res.status(409).json({ error: 'Product already exists in database.' });
-    // }
+  
     const product = new Product({ image, tagid, description, goldtype, price });
     await product.save();
     res.status(201).json(product);
@@ -40,6 +33,65 @@ exports.createProduct = async (req, res) => {
       fs.unlink(path.join('uploads', req.file.filename), () => {});
     }
     res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+// ✅ Update Product
+exports.updateProduct = async (req, res) => {
+  try {
+    const { id } = req.params; // product id from URL
+    const { tagid, description, goldtype, price } = req.body;
+    const newImage = req.file ? req.file.filename : null;
+
+    // Find existing product
+    const product = await Product.findById(id);
+    if (!product) {
+      // remove uploaded file if product not found
+      if (newImage) fs.unlink(path.join("uploads", newImage), () => {});
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    // If new image uploaded, remove old one
+    if (newImage && product.image) {
+      fs.unlink(path.join("uploads", product.image), () => {});
+      product.image = newImage;
+    }
+
+    // Update other fields if provided
+    if (tagid) product.tagid = tagid;
+    if (description) product.description = description;
+    if (goldtype) product.goldtype = goldtype;
+    if (price) product.price = price;
+
+    await product.save();
+    res.json({ message: "Product updated", product });
+  } catch (err) {
+    // remove uploaded new file if error
+    if (req.file && req.file.filename) {
+      fs.unlink(path.join("uploads", req.file.filename), () => {});
+    }
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ✅ Delete Product
+exports.deleteProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await Product.findByIdAndDelete(id);
+
+    if (!product) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    // Remove image file if exists
+    if (product.image) {
+      fs.unlink(path.join("uploads", product.image), () => {});
+    }
+
+    res.json({ message: "Product deleted", product });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
   }
 };
 

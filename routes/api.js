@@ -57,6 +57,12 @@ router.get('/getByUserAllotment', require('../controllers/paymentController').ge
 
 // Admin API STARTS
 router.post('/create-products', upload.single('image'), productController.createProduct);
+router.put(
+  "/update-products/:id",
+  upload.single("image"),
+  productController.updateProduct
+);
+router.delete("/delete-products/:id", productController.deleteProduct);
 router.get('/get-users', userController.getAllUsers);
 router.get('/getRate', goldpriceController.fetchAndStoreGoldRate);
 router.get('/getAllCurrentRate', goldpriceController.getAllCurrentRate);
