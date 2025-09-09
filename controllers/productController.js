@@ -14,17 +14,17 @@ const fs = require('fs');
 const path = require('path');
 exports.createProduct = async (req, res) => {
   try {
-    const { tagid, description, goldtype, price } = req.body;
+    const { tagid, description, goldtype, price, grams } = req.body;
     const image = req.file ? req.file.filename : null;
     // Validation error: remove uploaded file
-    if (!image || !tagid || !price) {
+    if (!image || !tagid || !price || !grams) {
       if (image) {
         fs.unlink(path.join('uploads', image), () => {});
       }
-      return res.status(400).json({ error: 'Image, tagid, and price are required.' });
+      return res.status(400).json({ error: 'Image, tagid, price, and grams are required.' });
     }
-  
-    const product = new Product({ image, tagid, description, goldtype, price });
+
+    const product = new Product({ image, tagid, description, goldtype, price, grams });
     await product.save();
     res.status(201).json(product);
   } catch (err) {
@@ -40,7 +40,7 @@ exports.createProduct = async (req, res) => {
 exports.updateProduct = async (req, res) => {
   try {
     const { id } = req.params; // product id from URL
-    const { tagid, description, goldtype, price } = req.body;
+    const { tagid, description, goldtype, price, grams } = req.body;
     const newImage = req.file ? req.file.filename : null;
 
     // Find existing product
@@ -62,6 +62,7 @@ exports.updateProduct = async (req, res) => {
     if (description) product.description = description;
     if (goldtype) product.goldtype = goldtype;
     if (price) product.price = price;
+    if (grams) product.grams = grams;
 
     await product.save();
     res.json({ message: "Product updated", product });

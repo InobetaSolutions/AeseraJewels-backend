@@ -13,7 +13,11 @@ const GoldPrice = require('./models/GoldPrice');
 cron.schedule("0 */6 * * *", async () => {
   try {
     const response = await axios.get("https://www.goldapi.io/api/XAU/INR", {
-      headers: { "x-access-token": "goldapi-7mbr7usmemt4wxs-io" },
+      headers: {
+        "x-access-token":
+        // "goldapi-7mbr7usmemt4wxs-io"
+        "goldapi-7mbr7usmemif7xq-io"
+      },
     });
     const { timestamp, price_gram_24k } = response.data;
 

@@ -1,73 +1,4 @@
 // Get allotment history for a mobile number
-// exports.getByUserAllotment = async (req, res) => {
-//   try {
-//     const { mobile } = req.query;
-//     if (!mobile) {
-//       return res.status(400).json({ error: 'Mobile is required.' });
-//     }
-//     const Allotment = require('../models/Allotment');
-//     const allotments = await Allotment.find({ mobile }).sort({ timestamp: -1 });
-//     // Calculate total grams and amount for this user
-//     const payments = await Payment.find({ mobile });
-//     const totalAmountRaw = payments.reduce((sum, p) => sum + (p.amount || 0) + (p.amount_allocated || 0), 0);
-//     const totalGramsRaw = payments.reduce((sum, p) => sum + (p.gram || 0) + (p.gram_allocated || 0), 0);
-//     console.log('Total Amount Raw:', totalAmountRaw, 'Total Grams Raw:', totalGramsRaw);
-//     // For each allotment, calculate proportional amount reduced
-//     const allotmentsWithAmount = allotments.map(a => {
-//       let amountReduced = 0;
-//       if (totalGramsRaw > 0) {
-//         amountReduced = (totalAmountRaw * a.gram) / totalGramsRaw;
-//       }
-//       return { ...a._doc, amountReduced: amountReduced.toFixed(2) };
-//     });
-//     res.json({ mobile, allotments: allotmentsWithAmount });
-//   } catch (err) {
-//     res.status(500).json({ error: "Server error." });
-//   }
-// };
-exports.getByUserAllotment = async (req, res) => {
-  try {
-    const { mobile } = req.query;
-    if (!mobile) {
-      return res.status(400).json({ error: "Mobile is required." });
-    }
-
-    const Allotment = require("../models/Allotment");
-    const allotments = await Allotment.find({ mobile }).sort({ timestamp: -1 });
-
-    // Get payments of this mobile
-    const payments = await Payment.find({ mobile });
-
-    // Only use real deposited amount
-    const totalAmountRaw = payments.reduce(
-      (sum, p) => sum + (p.amount || 0),
-      0
-    );
-
-    // But grams include both direct grams and allocated grams
-    const totalGramsRaw = payments.reduce(
-      (sum, p) => sum + (p.gram || 0) + (p.gram_allocated || 0),
-      0
-    );
-
-    // For each allotment, calculate proportional reduced amount
-    const allotmentsWithAmount = allotments.map((a) => {
-      let amountReduced = 0;
-      if (totalGramsRaw > 0) {
-        amountReduced = (totalAmountRaw * a.gram) / totalGramsRaw;
-      }
-      return {
-        ...a._doc,
-        amountReduced: Number(amountReduced.toFixed(2)),
-      };
-    });
-
-    res.json({ mobile, allotments: allotmentsWithAmount });
-  } catch (err) {
-    res.status(500).json({ error: "Server error." });
-  }
-};
-
 exports.setAllotment = async (req, res) => {
   try {
     const Allotment = require("../models/Allotment");
@@ -144,6 +75,49 @@ exports.setAllotment = async (req, res) => {
   }
 };
 
+// exports.getByUserAllotment = async (req, res) => {
+//   try {
+//     const { mobile } = req.query;
+//     if (!mobile) {
+//       return res.status(400).json({ error: "Mobile is required." });
+//     }
+
+//     const Allotment = require("../models/Allotment");
+//     const allotments = await Allotment.find({ mobile }).sort({ timestamp: -1 });
+
+//     // Get payments of this mobile
+//     const payments = await Payment.find({ mobile });
+
+//     // Only use real deposited amount
+//     const totalAmountRaw = payments.reduce(
+//       (sum, p) => sum + (p.amount || 0),
+//       0
+//     );
+
+//     // But grams include both direct grams and allocated grams
+//     const totalGramsRaw = payments.reduce(
+//       (sum, p) => sum + (p.gram || 0) + (p.gram_allocated || 0),
+//       0
+//     );
+
+//     // For each allotment, calculate proportional reduced amount
+//     const allotmentsWithAmount = allotments.map((a) => {
+//       let amountReduced = 0;
+//       if (totalGramsRaw > 0) {
+//         amountReduced = (totalAmountRaw * a.gram) / totalGramsRaw;
+//       }
+//       return {
+//         ...a._doc,
+//         amountReduced: Number(amountReduced.toFixed(2)),
+//       };
+//     });
+
+//     res.json({ mobile, allotments: allotmentsWithAmount });
+//   } catch (err) {
+//     res.status(500).json({ error: "Server error." });
+//   }
+// };
+
 exports.getByUserAllotment = async (req, res) => {
   try {
     const { mobile } = req.query;
@@ -152,9 +126,12 @@ exports.getByUserAllotment = async (req, res) => {
     }
 
     const Allotment = require("../models/Allotment");
+    const Payment = require("../models/Payment");
+
+    // Fetch allotments (latest first)
     const allotments = await Allotment.find({ mobile }).sort({ timestamp: -1 });
 
-    // Get payments of this mobile
+    // Fetch payments of this mobile
     const payments = await Payment.find({ mobile });
 
     // Only use real deposited amount
@@ -163,13 +140,17 @@ exports.getByUserAllotment = async (req, res) => {
       0
     );
 
-    // But grams include both direct grams and allocated grams
+    // Grams include both direct grams and allocated grams
     const totalGramsRaw = payments.reduce(
       (sum, p) => sum + (p.gram || 0) + (p.gram_allocated || 0),
       0
     );
 
-    // For each allotment, calculate proportional reduced amount
+    // Get last status (or default "Pending" if none found)
+    const lastStatus =
+      payments.length > 0 ? payments[payments.length - 1].status : "Pending";
+
+    // For each allotment, calculate proportional reduced amount + add status
     const allotmentsWithAmount = allotments.map((a) => {
       let amountReduced = 0;
       if (totalGramsRaw > 0) {
@@ -178,14 +159,17 @@ exports.getByUserAllotment = async (req, res) => {
       return {
         ...a._doc,
         amountReduced: Number(amountReduced.toFixed(2)),
+        status: lastStatus, // ✅ only status added
       };
     });
 
     res.json({ mobile, allotments: allotmentsWithAmount });
   } catch (err) {
+    console.error("Error in getByUserAllotment:", err);
     res.status(500).json({ error: "Server error." });
   }
 };
+
 // Get full payment summary for a mobile number
 exports.getFullPayment = async (req, res) => {
   try {

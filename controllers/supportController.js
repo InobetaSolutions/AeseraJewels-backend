@@ -8,6 +8,15 @@ exports.createSupport = async (req, res) => {
       return res.status(400).json({ error: "Mobile and email are required." });
     }
 
+    // Check if support record already exists
+    const existingSupport = await Support.findOne();
+    if (existingSupport) {
+      return res.status(409).json({ 
+        error: "Support record already exists. Only one support record is allowed.",
+        data: existingSupport
+      });
+    }
+
     const support = new Support({ mobile, email });
     await support.save();
 
@@ -23,11 +32,17 @@ exports.createSupport = async (req, res) => {
 
 exports.getSupport = async (req, res) => {
   try {
-    const supports = await Support.find().sort({ createdAt: -1 });
+    const support = await Support.findOne();
+    
+    if (!support) {
+      return res.status(404).json({ 
+        message: "No support record found" 
+      });
+    }
 
-    res.json({
-      message: "Support records fetched successfully",
-      data: supports,
+    res.status(200).json({
+      message: "Support record retrieved successfully",
+      data: support,
     });
   } catch (err) {
     console.error(err);
@@ -35,21 +50,52 @@ exports.getSupport = async (req, res) => {
   }
 };
 
-exports.getSupportById = async (req, res) => {
+exports.updateSupport = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { mobile, email } = req.body;
 
-    if (!id) {
-      return res.status(400).json({ error: "Support ID is required." });
+    if (!mobile || !email) {
+      return res.status(400).json({ error: "Mobile and email are required." });
     }
 
-    const support = await Support.findById(id);
+    // Find and update the single support record
+    const support = await Support.findOne();
+    
     if (!support) {
-      return res.status(404).json({ error: "Support record not found." });
+      return res.status(404).json({ 
+        error: "No support record found to update" 
+      });
     }
 
-    res.json({
-      message: "Support record fetched successfully",
+    // Update fields
+    support.mobile = mobile;
+    support.email = email;
+    await support.save();
+
+    res.status(200).json({
+      message: "Support record updated successfully",
+      data: support,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error." });
+  }
+};
+
+exports.deleteSupport = async (req, res) => {
+  try {
+    const support = await Support.findOne();
+    
+    if (!support) {
+      return res.status(404).json({ 
+        message: "No support record found to delete" 
+      });
+    }
+
+    await Support.deleteOne({ _id: support._id });
+
+    res.status(200).json({
+      message: "Support record deleted successfully",
       data: support,
     });
   } catch (err) {

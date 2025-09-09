@@ -33,7 +33,8 @@ const supportController = require("../controllers/supportController");
 
 router.post("/createSupport", supportController.createSupport);
 router.post("/getSupport", supportController.getSupport);
-router.post("/getSupportById/:id", supportController.getSupportById);
+router.post("/updateSupport", supportController.updateSupport);
+router.delete("/deleteSupport", supportController.deleteSupport);
 // On-Boarding STARTS
 router.post('/user-login', userController.userLogin);
 router.post('/generate-otp', userController.generateOtp);
@@ -58,6 +59,30 @@ router.post('/setAllotment',paymentController.setAllotment);
 router.get('/getByUserAllotment', require('../controllers/paymentController').getByUserAllotment);
 
 // App Payment ENDS
+
+// Catalog Payment and Allotment STARTS
+const catalogCtrl = require("../controllers/catalogController");
+
+router.post(
+  "/catalogPayment",
+  catalogCtrl.createCatalogPayment
+);   // Step1
+router.post("/updateCatalog", catalogCtrl.updateCatalog);
+// router.post(
+//   "/updateCatalogPayment",
+//   upload.single("image"),
+//   catalogCtrl.updateCatalogPayment
+// );
+// router.post(
+//   "/updateCatalogPayment",
+//   upload.single("image"),
+//   catalogCtrl.updateCatalogPayment
+// );
+router.get("/getCatalogPayment", catalogCtrl.getCatalogPayments);   // Step2
+router.post("/setCatalogAllotment", catalogCtrl.setCatalogAllotment); // Step3
+router.post("/getbyUserCatalog", catalogCtrl.getUserCatalog);       // Step4
+
+// Catalog Payment and Allotment ENDS
 
 // Admin API STARTS
 router.post('/create-products', upload.single('image'), productController.createProduct);
