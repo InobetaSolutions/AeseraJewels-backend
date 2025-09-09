@@ -5,7 +5,8 @@ const productSchema = new mongoose.Schema({
   tagid: { type: String, required: true },
   description: { type: String },
   goldtype: { type: String },
-  price: { type: Number, required: true }
+  price: { type: Number, required: true },
+  grams: { type: Number, required: true, default: 0 }
 });
 
 module.exports = mongoose.model('Product', productSchema);
