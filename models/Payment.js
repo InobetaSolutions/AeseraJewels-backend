@@ -7,7 +7,7 @@ const paymentSchema = new mongoose.Schema({
   gold: { type: Number }, // allocated gold in grams, set when approved
   // totalAmount: { type: Number, default: 0 }, // running total for this mobile
   timestamp: { type: Date, default: Date.now },
-  status: { type: String, default: "Pending" },
+  status: { type: String, default: "Payment Confirmation Pending" },
   // type: { type: String, enum: ['gram', 'amount'], required: true },
   gram: { type: Number },
   amount_allocated: { type: Number },

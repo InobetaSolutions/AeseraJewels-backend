@@ -80,8 +80,8 @@ router.post("/updateCatalog", catalogCtrl.updateCatalog);
 // );
 router.get("/getCatalogPayment", catalogCtrl.getCatalogPayments);   // Step2
 router.post("/setCatalogAllotment", catalogCtrl.setCatalogAllotment); // Step3
-router.post("/getbyUserCatalog", catalogCtrl.getUserCatalog);       // Step4
-
+router.post("/getbyUserCatalog", catalogCtrl.getUserCatalog);// Step4
+router.post("/approveCatalogPayment", catalogCtrl.approveCatalogPayment);
 // Catalog Payment and Allotment ENDS
 
 // Admin API STARTS

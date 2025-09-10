@@ -13,7 +13,10 @@ exports.setAllotment = async (req, res) => {
     // const payments2 = await Payment.find({ mobile });
     // console.log("Payments for mobile:", mobile, payments2);
     //     // ✅ Only consider Approved payments
-    const payments = await Payment.find({ mobile, status: "Approved" });
+    const payments = await Payment.find({
+      mobile,
+      status: "Payment Confirmed",
+    });
     if (payments.length === 0) {
       return res
         .status(400)
@@ -148,7 +151,9 @@ exports.getByUserAllotment = async (req, res) => {
 
     // Get last status (or default "Pending" if none found)
     const lastStatus =
-      payments.length > 0 ? payments[payments.length - 1].status : "Pending";
+      payments.length > 0
+        ? payments[payments.length - 1].status
+        : "Payment Confirmation Pending";
 
     // For each allotment, calculate proportional reduced amount + add status
     const allotmentsWithAmount = allotments.map((a) => {
@@ -304,7 +309,10 @@ exports.approvePayment = async (req, res) => {
     if (!id) {
       return res.status(400).json({ error: "Payment id is required." });
     }
-    let payment = await Payment.findOne({ _id: id, status: "Pending" });
+    let payment = await Payment.findOne({
+      _id: id,
+      status: "Payment Confirmation Pending",
+    });
     if (!payment) {
       return res
         .status(404)
@@ -321,7 +329,7 @@ exports.approvePayment = async (req, res) => {
     const goldRate = lastRate.price_gram_24k;
     const goldAllocated = parseFloat((payment.amount / goldRate).toFixed(4));
     payment.gold = goldAllocated;
-    payment.status = "Approved";
+    payment.status = "Payment Confirmed";
     await payment.save();
     res.json({
       message: "Payment Approved",
@@ -424,7 +432,10 @@ exports.getAllPayments = async (req, res) => {
       const mobile = p.mobile;
 
       // fetch all payments for this mobile
-      const userPayments = await Payment.find({ mobile, status: "Approved" });
+      const userPayments = await Payment.find({
+        mobile,
+        status: "Payment Confirmed",
+      });
       const totalAmountRaw = userPayments.reduce(
         (sum, x) => sum + (x.amount || 0),
         0
@@ -688,7 +699,7 @@ exports.mobilePayment = async (req, res) => {
       gram_allocated,
       gram,
       amount_allocated,
-      status: "Pending",
+      status: "Payment Confirmation Pending",
       timestamp: new Date(),
       paid_by: req.user?.mobile,
     };
