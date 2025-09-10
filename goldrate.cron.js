@@ -10,7 +10,7 @@ const GoldPrice = require('./models/GoldPrice');
 // └──────────────────── minute (0 - 59)
 
 // Schedule to fetch and store gold price every 30 minutes
-cron.schedule("0 */6 * * *", async () => {
+cron.schedule("0 */24 * * *", async () => {
   try {
     const response = await axios.get("https://www.goldapi.io/api/XAU/INR", {
       headers: {

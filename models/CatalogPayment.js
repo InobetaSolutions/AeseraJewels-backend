@@ -14,10 +14,18 @@ const catalogPaymentSchema = new mongoose.Schema(
     Paidamount: { type: Number, default: 0 }, // paid so far
     Paidgrams: { type: Number, default: 0 }, // paid grams
     // allotmentStatus: { type: Boolean, default: false }, // Step3 updates this
+    paymentStatus: {
+      type: String,
+      // enum: ["Pending", "Approved", "Delivered"],
+      enum: [
+        "Payment Confirmation Pending",
+        "Payment Approved - Delivery is in Process"
+      ],
+      default: "Payment Confirmation Pending",
+    },
     allotmentStatus: {
       type: String,
-      enum: ["Pending", "Approved"],
-      default: "Pending",
+      default: "Not Delivered",
     },
   },
   { timestamps: true }
