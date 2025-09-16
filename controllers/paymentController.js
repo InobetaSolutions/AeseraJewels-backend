@@ -5,7 +5,7 @@ exports.setAllotment = async (req, res) => {
     const Payment = require("../models/Payment");
     const { mobile, gram } = req.body;
 
-    if (!mobile || !gram || isNaN(gram) || gram <= 0) {
+    if (!mobile || isNaN(gram) || gram <= 0) {
       return res
         .status(400)
         .json({ error: "Mobile and valid gram are required." });
@@ -35,7 +35,7 @@ exports.setAllotment = async (req, res) => {
     const totalGramsAvailable = totalGramsRaw - totalAllotted;
 
     if (gram > totalGramsAvailable) {
-      return res.status(400).json({ error: "Not enough grams to allot." });
+      return res.status(400).json({ error: `Not enough grams to allot. You have only ${totalGramsAvailable} grams available.` });
     }
 
     // Record the allotment
@@ -66,12 +66,15 @@ exports.setAllotment = async (req, res) => {
     const totalAmount2 =
       totalGramsRaw2 > 0 ? (totalAmountRaw * totalGrams2) / totalGramsRaw2 : 0;
 
+    // Format timestamp to IST (Asia/Kolkata)
+    const istTimestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
     return res.json({
       message: "Allotment recorded",
       mobile,
       gram,
       totalGrams: Number(totalGrams2.toFixed(3)),
       totalAmount: Number(totalAmount2.toFixed(2)),
+      timestamp: istTimestamp,
     });
   } catch (err) {
     res.status(500).json({ error: "Server error." });
@@ -161,13 +164,15 @@ exports.getByUserAllotment = async (req, res) => {
       if (totalGramsRaw > 0) {
         amountReduced = (totalAmountRaw * a.gram) / totalGramsRaw;
       }
+      // Format allotment timestamp to IST
+      const istTimestamp = a.timestamp ? new Date(a.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : null;
       return {
         ...a._doc,
         amountReduced: Number(amountReduced.toFixed(2)),
-        status: lastStatus, // ✅ only status added
+        status: lastStatus,
+        timestamp: istTimestamp,
       };
     });
-
     res.json({ mobile, allotments: allotmentsWithAmount });
   } catch (err) {
     console.error("Error in getByUserAllotment:", err);
@@ -293,8 +298,8 @@ exports.getPaymentHistory = async (req, res) => {
     const formatted = payments.map((p) => ({
       ...p._doc,
       gold: p.gold || 0,
+      timestamp: p.timestamp ? new Date(p.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : null,
     }));
-
     res.json({ totalAmount, totalGrams, payments: formatted });
   } catch (err) {
     res.status(500).json({ error: "Server error." });
@@ -331,9 +336,11 @@ exports.approvePayment = async (req, res) => {
     payment.gold = goldAllocated;
     payment.status = "Payment Confirmed";
     await payment.save();
+    // Format timestamp to IST (Asia/Kolkata)
+    const istTimestamp = payment.timestamp ? new Date(payment.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : null;
     res.json({
       message: "Payment Approved",
-      payment: { ...payment._doc, gold: payment.gold || 0 },
+      payment: { ...payment._doc, gold: payment.gold || 0, timestamp: istTimestamp },
     });
   } catch (err) {
     res.status(500).json({ error: "Server error." });
@@ -470,7 +477,11 @@ exports.getAllPayments = async (req, res) => {
       });
     }
 
-    res.json(enriched);
+    // Format all payment timestamps to IST
+    res.json(enriched.map(p => ({
+      ...p,
+      timestamp: p.timestamp ? new Date(p.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : null,
+    })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error." });
@@ -715,17 +726,19 @@ exports.mobilePayment = async (req, res) => {
     const payment = new Payment(paymentData);
     await payment.save();
 
+    // Format timestamp to IST (Asia/Kolkata)
+    const istTimestamp = new Date(payment.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
     res.status(201).json({
       mobile: payment.mobile,
       others: payment.others,
       amount: payment.amount,
       totalAmount: paymentData.totalAmount,
-      timestamp: payment.timestamp,
+      timestamp: istTimestamp,
       status: payment.status,
       gram: payment.gram,
       amount_allocated: payment.amount_allocated,
       gram_allocated: payment.gram_allocated,
-      _id: payment._id,
+      _id: payment._id
     });
   } catch (err) {
     console.error("Error in mobilePayment:", err);
