@@ -13,6 +13,6 @@ const paymentSchema = new mongoose.Schema({
   amount_allocated: { type: Number },
   gram_allocated: { type: Number },
   // paid_by: { type: String } // JWT mobile of payer
-});
+}, {timestamps: true});
 
 module.exports = mongoose.model('Payment', paymentSchema);

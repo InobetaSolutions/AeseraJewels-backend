@@ -1,3 +1,100 @@
+
+// Cancel Catalog Payment
+exports.cancelCatalogPayment = async (req, res) => {
+  try {
+    const { catalogID, mobileNumber } = req.body;
+    if (!catalogID || !mobileNumber) {
+      return res
+        .status(400)
+        .json({
+          status: false,
+          message: "catalogID and mobileNumber are required",
+        });
+    }
+    const payment = await CatalogPayment.findOneAndUpdate(
+      {
+        _id: catalogID,
+        mobileNumber,
+        paymentStatus: { $ne: "Payment Cancelled" },
+      },
+      { $set: { paymentStatus: "Payment Cancelled" } },
+      { new: true }
+    );
+    if (!payment) {
+      return res
+        .status(404)
+        .json({
+          status: false,
+          message: "Catalog payment not found or already cancelled",
+        });
+    }
+    const istTimestamp = payment.updatedAt
+      ? new Date(payment.updatedAt).toLocaleString("en-IN", {
+          timeZone: "Asia/Kolkata",
+        })
+      : null;
+    res.status(200).json({
+      status: true,
+      message: "Catalog payment cancelled",
+      data: { ...payment._doc, timestamp: istTimestamp },
+    });
+  } catch (err) {
+    res.status(500).json({ status: false, message: err.message });
+  }
+};
+
+// Get all cancelled catalog payments
+exports.getAllCancelCatalogPayments = async (req, res) => {
+  try {
+    const payments = await CatalogPayment.find({
+      paymentStatus: "Payment Cancelled",
+    }).sort({ updatedAt: -1 });
+    const formatted = payments.map((p) => ({
+      ...p._doc,
+      timestamp: p.updatedAt
+        ? new Date(p.updatedAt).toLocaleString("en-IN", {
+            timeZone: "Asia/Kolkata",
+          })
+        : null,
+    }));
+    res.status(200).json({
+      status: true,
+      message: "Cancelled catalog payments fetched successfully.",
+      data: formatted,
+    });
+  } catch (err) {
+    res.status(500).json({ status: false, message: err.message });
+  }
+};
+
+// Get all approved catalog payments
+exports.getAllCatalogApprovePayments = async (req, res) => {
+  try {
+    const payments = await CatalogPayment.find({
+      paymentStatus: {
+        $in: [
+          "Payment Approved - Delivery is in Process",
+          "Payment Approved - Delivered",
+        ],
+      },
+    }).sort({ updatedAt: -1 });
+    const formatted = payments.map((p) => ({
+      ...p._doc,
+      timestamp: p.updatedAt
+        ? new Date(p.updatedAt).toLocaleString("en-IN", {
+            timeZone: "Asia/Kolkata",
+          })
+        : null,
+    }));
+    res.status(200).json({
+      status: true,
+      message: "Approved catalog payments fetched successfully.",
+      data: formatted,
+    });
+  } catch (err) {
+    res.status(500).json({ status: false, message: err.message });
+  }
+};
 const CatalogPayment = require("../models/CatalogPayment");
 
 exports.createCatalogPayment = async (req, res) => {
@@ -48,7 +145,9 @@ exports.updateCatalog = async (req, res) => {
 
 exports.getCatalogPayments = async (req, res) => {
   try {
-    const payments = await CatalogPayment.find();
+    const payments = await CatalogPayment.find({
+      paymentStatus: "Payment Confirmation Pending",
+    });
     // {
     //   allotmentStatus: "Payment Approved - Delivery is in Process",
     // }
@@ -143,7 +242,12 @@ exports.setCatalogAllotment = async (req, res) => {
     // Update allotment status to "Delivered" since payment is already approved
     const payment = await CatalogPayment.findOneAndUpdate(
       { _id: catalogID, mobileNumber },
-      { $set: { allotmentStatus: "Delivered", paymentStatus: "Payment Approved - Delivered" } },
+      {
+        $set: {
+          allotmentStatus: "Delivered",
+          paymentStatus: "Payment Approved - Delivered",
+        },
+      },
       { new: true }
     );
 
@@ -156,4 +260,3 @@ exports.setCatalogAllotment = async (req, res) => {
     res.status(500).json({ status: false, message: err.message });
   }
 };
-
