@@ -100,6 +100,20 @@ router.post("/approve-payment", paymentController.approvePayment);
 router.get("/getProductCount", productController.getProductCount);
 // Admin API ENDS
 
+// Tax and Delivery Charge APIs STARTS
+const taxController = require("../controllers/taxController");
+const deliveryChargeController = require("../controllers/deliveryChargeController");
+
+router.post("/createTax", taxController.createTax);
+router.get("/getTax", taxController.getTax);
+router.put("/updateTax", taxController.updateTax);
+router.delete("/deleteTax", taxController.deleteTax);
+
+router.post("/createDeliveryCharge", deliveryChargeController.createDeliveryCharge);
+router.get("/getDeliveryCharge", deliveryChargeController.getDeliveryCharge);
+router.put("/updateDeliveryCharge", deliveryChargeController.updateDeliveryCharge);
+router.delete("/deleteDeliveryCharge", deliveryChargeController.deleteDeliveryCharge);
+
 // List all files in uploads directory
 const fs = require("fs");
 router.get("/uploads", (req, res) => {

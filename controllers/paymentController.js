@@ -391,7 +391,7 @@ exports.approvePayment = async (req, res) => {
     }
     let payment = await Payment.findOne({
       _id: id,
-      status: "Payment Confirmation Pending",
+      status: { $in: ["Payment Confirmation Pending", "Payment Cancelled"] },
     });
     if (!payment) {
       return res
