@@ -20,3 +20,4 @@ This is a Node.js backend project using the MVC pattern. It provides an API to g
   - **Body:** `{ "mobile": "string", "name": "string" }`
   - **Response:** `{ "mobile": "string", "otp": "string", "token": "string" }`
 
+update for dev50
