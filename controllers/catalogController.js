@@ -183,14 +183,26 @@ exports.getUserCatalog = async (req, res) => {
   }
 };
 
-// Approve Catalog Payment - New Function
-
 exports.approveCatalogPayment = async (req, res) => {
   try {
     const { mobileNumber, catalogID } = req.body;
 
+    if (!mobileNumber || !catalogID) {
+      return res.status(400).json({
+        status: false,
+        message: "Mobile number and catalogID are required",
+      });
+    }
+
+    // Update only if status is allowed
     const payment = await CatalogPayment.findOneAndUpdate(
-      { _id: catalogID, mobileNumber },
+      {
+        _id: catalogID,
+        mobileNumber,
+        paymentStatus: {
+          $in: ["Payment Confirmation Pending", "Payment Cancelled"],
+        },
+      },
       {
         $set: { paymentStatus: "Payment Approved - Delivery is in Process" },
       },
@@ -198,9 +210,10 @@ exports.approveCatalogPayment = async (req, res) => {
     );
 
     if (!payment) {
-      return res
-        .status(404)
-        .json({ status: false, message: "Catalog payment not found" });
+      return res.status(404).json({
+        status: false,
+        message: "Catalog payment not found or already approved",
+      });
     }
 
     res.status(200).json({
