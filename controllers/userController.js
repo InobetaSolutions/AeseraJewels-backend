@@ -34,7 +34,7 @@ exports.userLogin = async (req, res) => {
     }
   const otp = generateRandomOtp();
   otpStore[mobile] = otp;
-  const token = jwt.sign({ mobile, name: user.name }, process.env.JWT_SECRET || 'secretkey', { expiresIn: '1h' });
+  const token = jwt.sign({ mobile, name: user.name }, process.env.JWT_SECRET || 'secretkey', { expiresIn: '48h' });
   const refreshToken = jwt.sign({ mobile, name: user.name }, process.env.JWT_REFRESH_SECRET || 'refreshsecretkey', { expiresIn: '7d' });
   return res.json({ mobile, otp, token, refreshToken });
   } catch (err) {
@@ -130,6 +130,6 @@ exports.resendOtp = async (req, res) => {
   const otp = Math.floor(1000 + Math.random() * 9000).toString();
   otpStore[mobile] = otp;
     const jwt = require('jsonwebtoken');
-    const token = jwt.sign({ mobile }, process.env.JWT_SECRET || 'secretkey', { expiresIn: '1h' });
+    const token = jwt.sign({ mobile }, process.env.JWT_SECRET || 'secretkey', { expiresIn: '48h' });
     res.json({ mobile, otp, token, message: 'OTP resent' });
 };

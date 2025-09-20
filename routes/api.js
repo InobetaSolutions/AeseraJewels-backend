@@ -104,15 +104,23 @@ router.get("/getProductCount", productController.getProductCount);
 const taxController = require("../controllers/taxController");
 const deliveryChargeController = require("../controllers/deliveryChargeController");
 
-router.post("/createTax", taxController.createTax);
+router.post("/createTax",auth, taxController.createTax);
 router.get("/getTax", taxController.getTax);
-router.put("/updateTax", taxController.updateTax);
-router.delete("/deleteTax", taxController.deleteTax);
+router.put("/updateTax", auth, taxController.updateTax);
+router.delete("/deleteTax", auth, taxController.deleteTax);
 
-router.post("/createDeliveryCharge", deliveryChargeController.createDeliveryCharge);
+router.post("/createDeliveryCharge", auth, deliveryChargeController.createDeliveryCharge);
 router.get("/getDeliveryCharge", deliveryChargeController.getDeliveryCharge);
-router.put("/updateDeliveryCharge", deliveryChargeController.updateDeliveryCharge);
-router.delete("/deleteDeliveryCharge", deliveryChargeController.deleteDeliveryCharge);
+router.put("/updateDeliveryCharge", auth, deliveryChargeController.updateDeliveryCharge);
+router.delete("/deleteDeliveryCharge", auth, deliveryChargeController.deleteDeliveryCharge);
+// Tax and Delivery Charge APIs ENDS
+
+// Address APIs STARTS
+router.post("/addDeliveryAddress", auth, addressController.addDeliveryAddress);
+router.post("/getDeliveryAddress", addressController.getDeliveryAddress);
+router.put("/updateDeliveryAddress", auth, addressController.updateDeliveryAddress);
+router.post("/deleteDeliveryAddress", auth, addressController.deleteDeliveryAddress);
+// Address APIs ENDS
 
 // List all files in uploads directory
 const fs = require("fs");
