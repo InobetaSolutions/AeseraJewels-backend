@@ -161,6 +161,28 @@ exports.getCatalogPayments = async (req, res) => {
   }
 };
 
+// exports.getUserCatalog = async (req, res) => {
+//   try {
+//     const { mobileNumber } = req.body;
+
+//     if (!mobileNumber) {
+//       return res
+//         .status(400)
+//         .json({ status: false, message: "Mobile number required" });
+//     }
+
+//     const catalogs = await CatalogPayment.find({ mobileNumber }).sort({ createdAt: -1 });
+
+//     res.status(200).json({
+//       status: true,
+//       message: "User Catalog Retrieved",
+//       data: catalogs,
+//     });
+//   } catch (err) {
+//     res.status(500).json({ status: false, message: err.message });
+//   }
+// };
+
 exports.getUserCatalog = async (req, res) => {
   try {
     const { mobileNumber } = req.body;
@@ -171,12 +193,27 @@ exports.getUserCatalog = async (req, res) => {
         .json({ status: false, message: "Mobile number required" });
     }
 
-    const catalogs = await CatalogPayment.find({ mobileNumber });
+    const catalogs = await CatalogPayment.find({ mobileNumber }).sort({
+      createdAt: -1,
+    });
+
+    // Add IST timestamp to each catalog
+    const catalogsWithTimestamp = catalogs.map((c) => {
+      const istTimestamp = c.updatedAt
+        ? new Date(c.updatedAt).toLocaleString("en-IN", {
+            timeZone: "Asia/Kolkata",
+          })
+        : null;
+      return {
+        ...c._doc,
+        timestamp: istTimestamp,
+      };
+    });
 
     res.status(200).json({
       status: true,
       message: "User Catalog Retrieved",
-      data: catalogs,
+      data: catalogsWithTimestamp,
     });
   } catch (err) {
     res.status(500).json({ status: false, message: err.message });
