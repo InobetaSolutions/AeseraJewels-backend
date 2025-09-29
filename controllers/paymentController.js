@@ -330,6 +330,60 @@ exports.getFullPayment = async (req, res) => {
   }
 };
 
+// both approved + cancelled payments for a mobile
+
+// exports.getPaymentHistory = async (req, res) => {
+//   try {
+//     const { mobile } = req.body;
+//     if (!mobile) {
+//       return res.status(400).json({ error: "Mobile is required." });
+//     }
+
+//     const Payment = require("../models/Payment");
+
+//     // Fetch both where mobile is the number OR others is the number
+//     const payments = await Payment.find({
+//       $or: [{ mobile }, { others: mobile }],
+//     }).sort({ timestamp: -1 });
+
+//     // Raw totals (include both direct + others)
+//     const totalAmountRaw = payments.reduce(
+//       (sum, p) => sum + (p.amount || 0),
+//       0
+//     );
+
+//     const totalGramsRaw = payments.reduce(
+//       (sum, p) => sum + (p.gram || 0) + (p.gram_allocated || 0),
+//       0
+//     );
+
+//     // Subtract allotments
+//     const Allotment = require("../models/Allotment");
+//     const allotments = await Allotment.find({ mobile });
+//     const totalAllotted = allotments.reduce((sum, a) => sum + (a.gram || 0), 0);
+
+//     const totalGrams = totalGramsRaw - totalAllotted;
+
+//     // Proportionally adjust amount
+//     const totalAmount =
+//       totalGramsRaw > 0 ? (totalAmountRaw * totalGrams) / totalGramsRaw : 0;
+
+//     const formatted = payments.map((p) => ({
+//       ...p._doc,
+//       gold: p.gold || 0,
+//       timestamp: p.timestamp
+//         ? new Date(p.timestamp).toLocaleString("en-IN", {
+//             timeZone: "Asia/Kolkata",
+//           })
+//         : null,
+//     }));
+//     res.json({ totalAmount, totalGrams, payments: formatted });
+//   } catch (err) {
+//     res.status(500).json({ error: "Server error." });
+//   }
+// };
+
+// Get payment history (approved + cancelled) for a mobile, total grams + total amount when approved only
 exports.getPaymentHistory = async (req, res) => {
   try {
     const { mobile } = req.body;
@@ -339,18 +393,23 @@ exports.getPaymentHistory = async (req, res) => {
 
     const Payment = require("../models/Payment");
 
-    // Fetch both where mobile is the number OR others is the number
+    // Fetch all payments for display (both where mobile is the number OR others is the number)
     const payments = await Payment.find({
       $or: [{ mobile }, { others: mobile }],
     }).sort({ timestamp: -1 });
 
-    // Raw totals (include both direct + others)
-    const totalAmountRaw = payments.reduce(
+    // Only include confirmed payments for totals
+    const confirmedPayments = payments.filter(
+      (p) => p.status === "Payment Confirmed"
+    );
+
+    // Raw totals (include both direct + others, but only confirmed)
+    const totalAmountRaw = confirmedPayments.reduce(
       (sum, p) => sum + (p.amount || 0),
       0
     );
 
-    const totalGramsRaw = payments.reduce(
+    const totalGramsRaw = confirmedPayments.reduce(
       (sum, p) => sum + (p.gram || 0) + (p.gram_allocated || 0),
       0
     );
@@ -380,7 +439,6 @@ exports.getPaymentHistory = async (req, res) => {
     res.status(500).json({ error: "Server error." });
   }
 };
-
 // Approve payment by ObjectId
 
 exports.approvePayment = async (req, res) => {
