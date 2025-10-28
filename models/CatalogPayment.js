@@ -31,7 +31,24 @@ const catalogPaymentSchema = new mongoose.Schema(
       default: "Not Delivered",
     },
   },
-  { timestamps: true }
+  { 
+    timestamps: true,
+    toJSON: {
+      transform: function(doc, ret) {
+        if (ret.createdAt) {
+          ret.createdAt = new Date(ret.createdAt).toLocaleString("en-IN", {
+            timeZone: "Asia/Kolkata"
+          });
+        }
+        if (ret.updatedAt) {
+          ret.updatedAt = new Date(ret.updatedAt).toLocaleString("en-IN", {
+            timeZone: "Asia/Kolkata"
+          });
+        }
+        return ret;
+      }
+    }
+  }
 );
 
 module.exports = mongoose.model("CatalogPayment", catalogPaymentSchema);
