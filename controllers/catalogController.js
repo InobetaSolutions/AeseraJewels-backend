@@ -131,14 +131,41 @@ exports.createCatalogPayment1 = async (req, res) => {
 
     const newPayment = new CatalogPayment(payload);
     const saved = await newPayment.save();
-    //* console.log("Catalog Payment Created:", saved);
-    res
-      .status(201)
-      .json({ status: true, message: "Catalog Payment Created", data: saved });
+    
+    // Format timestamps to IST (Asia/Kolkata)
+    const formatToIST = (date) => {
+      return date ? new Date(date).toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+      }) : null;
+    };
+
+    res.status(201).json({ 
+      status: true, 
+      message: "Catalog Payment Created", 
+      data: {
+        ...saved._doc,
+        createdAt: formatToIST(saved.createdAt),
+        updatedAt: formatToIST(saved.updatedAt),
+        // timestamp: formatToIST(saved.createdAt)
+      }
+    });
   } catch (err) {
     res.status(500).json({ status: false, message: err.message });
   }
 };
+
+// exports.createCatalogPayment1 = async (req, res) => {
+//   try {
+//     const newPayment = new CatalogPayment(req.body);
+//     const saved = await newPayment.save();
+//     //* console.log("Catalog Payment Created:", saved);
+//     res
+//       .status(201)
+//       .json({ status: true, message: "Catalog Payment Created", data: saved });
+//   } catch (err) {
+//     res.status(500).json({ status: false, message: err.message });
+//   }
+// };
 
 exports.updateCatalog = async (req, res) => {
   try {
@@ -341,10 +368,22 @@ exports.approveCatalogPayment = async (req, res) => {
       console.error("Failed to adjust Payment.totalAmount after catalog approval:", e.message);
     }
 
+    // Format timestamps to IST (Asia/Kolkata)
+    const formatToIST = (date) => {
+      return date ? new Date(date).toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+      }) : null;
+    };
+
     res.status(200).json({
       status: true,
       message: "Payment approved successfully",
-      data: payment,
+      data: {
+        ...payment._doc,
+        createdAt: formatToIST(payment.createdAt),
+        updatedAt: formatToIST(payment.updatedAt),
+        timestamp: formatToIST(payment.updatedAt)
+      }
     });
   } catch (err) {
     res.status(500).json({ status: false, message: err.message });

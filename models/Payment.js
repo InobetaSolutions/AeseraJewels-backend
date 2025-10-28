@@ -15,6 +15,29 @@ const paymentSchema = new mongoose.Schema({
   gram_allocated: { type: Number },
   paid_amount:{type:Number},
   // paid_by: { type: String } // JWT mobile of payer
-}, {timestamps: true});
+}, {
+  timestamps: true,
+  toJSON: {
+    transform: function(doc, ret) {
+      if (ret.createdAt) {
+        ret.createdAt = new Date(ret.createdAt).toLocaleString("en-IN", {
+          timeZone: "Asia/Kolkata"
+        });
+      }
+      if (ret.updatedAt) {
+        ret.updatedAt = new Date(ret.updatedAt).toLocaleString("en-IN", {
+          timeZone: "Asia/Kolkata"
+        });
+      }
+      // Also transform the timestamp field since it exists in this schema
+      if (ret.timestamp) {
+        ret.timestamp = new Date(ret.timestamp).toLocaleString("en-IN", {
+          timeZone: "Asia/Kolkata"
+        });
+      }
+      return ret;
+    }
+  }
+});
 
 module.exports = mongoose.model('Payment', paymentSchema);
