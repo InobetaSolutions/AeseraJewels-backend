@@ -8,9 +8,12 @@ const catalogPaymentSchema = new mongoose.Schema(
     description: { type: String, required: true },
     amount: { type: Number, required: true }, // total value
     grams: { type: Number, required: true }, // total grams
-    address: { type: String, required: true },
-    city: { type: String, required: true },
-    postCode: { type: String, required: true },
+
+    address: { type: String},
+    city: { type: String},
+    postCode: { type: String},
+  // amount to deduct (for payments created with an existing amount)
+  investAmount: { type: Number, default: 0 },
     Paidamount: { type: Number, default: 0 }, // paid so far
     Paidgrams: { type: Number, default: 0 }, // paid grams
     // allotmentStatus: { type: Boolean, default: false }, // Step3 updates this
