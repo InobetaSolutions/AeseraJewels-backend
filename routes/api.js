@@ -78,6 +78,8 @@ router.get("/getCatalogPayment", catalogCtrl.getCatalogPayments); // Step2
 router.post("/setCatalogAllotment", catalogCtrl.setCatalogAllotment); // Step3
 router.post("/getbyUserCatalog", catalogCtrl.getUserCatalog); // Step4
 router.post("/approveCatalogPayment", catalogCtrl.approveCatalogPayment);
+router.post("/catalogPayment1",catalogCtrl.createCatalogPayment1)
+
 // Catalog Payment and Allotment ENDS
 
 // Admin API STARTS
@@ -109,10 +111,10 @@ router.get("/getTax", taxController.getTax);
 router.put("/updateTax", auth, taxController.updateTax);
 router.delete("/deleteTax", auth, taxController.deleteTax);
 
-router.post("/createDeliveryCharge", auth, deliveryChargeController.createDeliveryCharge);
+router.post("/createDeliveryCharge",  deliveryChargeController.createDeliveryCharge);
 router.get("/getDeliveryCharge", deliveryChargeController.getDeliveryCharge);
-router.put("/updateDeliveryCharge", auth, deliveryChargeController.updateDeliveryCharge);
-router.delete("/deleteDeliveryCharge", auth, deliveryChargeController.deleteDeliveryCharge);
+router.put("/updateDeliveryCharge",  deliveryChargeController.updateDeliveryCharge);
+router.delete("/deleteDeliveryCharge",  deliveryChargeController.deleteDeliveryCharge);
 // Tax and Delivery Charge APIs ENDS
 
 // Address APIs STARTS

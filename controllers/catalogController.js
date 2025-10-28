@@ -109,6 +109,36 @@ exports.createCatalogPayment = async (req, res) => {
     res.status(500).json({ status: false, message: err.message });
   }
 };
+const User =require("../models/User")
+
+
+
+exports.createCatalogPayment1 = async (req, res) => {
+  try {
+    // Accept paidAmount and investAmount in the request and sum them to form the payment `amount`.
+    // Example: amount = Number(paidAmount) + Number(investAmount)
+    const { paidAmount = 0, investAmount = 0 } = req.body;
+    const paid = Number(paidAmount) || 0;
+    const invest = Number(investAmount) || 0;
+    const totalAmount = paid + invest;
+
+    // Build payload and ensure we persist the paid portion into Paidamount field
+    const payload = {
+      ...req.body,
+      amount: totalAmount,
+      Paidamount: paid,
+    };
+
+    const newPayment = new CatalogPayment(payload);
+    const saved = await newPayment.save();
+    //* console.log("Catalog Payment Created:", saved);
+    res
+      .status(201)
+      .json({ status: true, message: "Catalog Payment Created", data: saved });
+  } catch (err) {
+    res.status(500).json({ status: false, message: err.message });
+  }
+};
 
 exports.updateCatalog = async (req, res) => {
   try {
@@ -220,6 +250,49 @@ exports.getUserCatalog = async (req, res) => {
   }
 };
 
+// exports.approveCatalogPayment = async (req, res) => {
+//   try {
+//     const { mobileNumber, catalogID } = req.body;
+
+//     if (!mobileNumber || !catalogID) {
+//       return res.status(400).json({
+//         status: false,
+//         message: "Mobile number and catalogID are required",
+//       });
+//     }
+
+//     // Update only if status is allowed
+//     const payment = await CatalogPayment.findOneAndUpdate(
+//       {
+//         _id: catalogID,
+//         mobileNumber,
+//         paymentStatus: {
+//           $in: ["Payment Confirmation Pending", "Payment Cancelled"],
+//         },
+//       },
+//       {
+//         $set: { paymentStatus: "Payment Approved - Delivery is in Process" },
+//       },
+//       { new: true }
+//     );
+
+//     if (!payment) {
+//       return res.status(404).json({
+//         status: false,
+//         message: "Catalog payment not found or already approved",
+//       });
+//     }
+
+//     res.status(200).json({
+//       status: true,
+//       message: "Payment approved successfully",
+//       data: payment,
+//     });
+//   } catch (err) {
+//     res.status(500).json({ status: false, message: err.message });
+//   }
+// };
+{}
 exports.approveCatalogPayment = async (req, res) => {
   try {
     const { mobileNumber, catalogID } = req.body;
@@ -253,6 +326,21 @@ exports.approveCatalogPayment = async (req, res) => {
       });
     }
 
+    // If this catalog payment had an investAmount, subtract it from the user's Payment.totalAmount
+    try {
+      const Payment = require("../models/Payment");
+      const invest = Number(payment.investAmount || 0);
+      if (invest > 0) {
+        // Decrease totalAmount for all payments for this mobile
+        await Payment.updateMany({ mobile: mobileNumber }, { $inc: { totalAmount: -invest } });
+        // Ensure we don't leave negative totals
+        await Payment.updateMany({ mobile: mobileNumber, totalAmount: { $lt: 0 } }, { $set: { totalAmount: 0 } });
+      }
+    } catch (e) {
+      // Log error but don't block approval response
+      console.error("Failed to adjust Payment.totalAmount after catalog approval:", e.message);
+    }
+
     res.status(200).json({
       status: true,
       message: "Payment approved successfully",
@@ -262,6 +350,79 @@ exports.approveCatalogPayment = async (req, res) => {
     res.status(500).json({ status: false, message: err.message });
   }
 };
+
+
+{
+}
+
+// exports.approveCatalogPayment = async (req, res) => {
+//   try {
+//     const { mobileNumber, catalogID } = req.body;
+
+//     if (!mobileNumber || !catalogID) {
+//       return res.status(400).json({
+//         status: false,
+//         message: "Mobile number and catalogID are required",
+//       });
+//     }
+
+//     // Update only if status is allowed
+//     const payment = await CatalogPayment.findOneAndUpdate(
+//       {
+//         _id: catalogID,
+//         mobileNumber,
+//         paymentStatus: {
+//           $in: ["Payment Confirmation Pending", "Payment Cancelled"],
+//         },
+//       },
+//       {
+//         $set: { paymentStatus: "Payment Approved - Delivery is in Process" },
+//       },
+//       { new: true }
+//     );
+
+//     if (!payment) {
+//       return res.status(404).json({
+//         status: false,
+//         message: "Catalog payment not found or already approved",
+//       });
+//     }
+
+//     // If this catalog payment had an investAmount, subtract it from the latest Payment totalAmount
+//     try {
+//       const Payment = require("../models/Payment");
+//       const invest = Number(payment.investAmount || 0);
+//       if (invest > 0) {
+//         // Find the latest confirmed payment
+//         const latestPayment = await Payment.findOne({
+//           mobile: mobileNumber,
+//           status: "Payment Confirmed"
+//         }).sort({ createdAt: -1 });
+
+//         if (latestPayment) {
+//           // Get current totalAmount and subtract invest amount
+//           const currentTotal = Number(latestPayment.totalAmount || 0);
+//           const newTotal = Math.max(0, currentTotal - invest); // Ensure it doesn't go below 0
+          
+//           // Update just this latest payment's totalAmount
+//           latestPayment.totalAmount = Number(formatTo2Decimals(newTotal));
+//           await latestPayment.save();
+//         }
+//       }
+//     } catch (e) {
+//       // Log error but don't block approval response
+//       console.error("Failed to adjust Payment.totalAmount after catalog approval:", e.message);
+//     }
+
+//     res.status(200).json({
+//       status: true,
+//       message: "Payment approved successfully",
+//       data: payment,
+//     });
+//   } catch (err) {
+//     res.status(500).json({ status: false, message: err.message });
+//   }
+// };
 
 exports.setCatalogAllotment = async (req, res) => {
   try {
