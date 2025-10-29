@@ -440,7 +440,7 @@ exports.getFullPayment = async (req, res) => {
 //   }
 // };
 
-{"working code starts"}
+// {"working code starts"}
 
 // exports.getPaymentHistory = async (req, res) => {
 //   try {
@@ -484,7 +484,7 @@ exports.getFullPayment = async (req, res) => {
 //   }
 // };
 
-{"working code ends"}
+// {"working code ends"}
 
 
 exports.getPaymentHistory = async (req, res) => {
