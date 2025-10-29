@@ -15,6 +15,8 @@ const catalogPaymentSchema = new mongoose.Schema(
     investAmount: { type: Number, default: 0 },
     Paidamount: { type: Number, default: 0 }, // paid so far
     Paidgrams: { type: Number, default: 0 }, // paid grams
+    taxAmount:{type:Number},
+    deliveryCharge:{type:Number},
     // allotmentStatus: { type: Boolean, default: false }, // Step3 updates this
     paymentStatus: {
       type: String,

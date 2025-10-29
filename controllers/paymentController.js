@@ -509,9 +509,11 @@ exports.getPaymentHistory = async (req, res) => {
     const formatted = payments.map((p) => ({
       ...p._doc,
       gold: p.gold || 0,
-      // Only include totalAmount and totalGrams if payment is confirmed
       totalAmount: p.status === "Payment Confirmed" ? Number(formatTo2Decimals(p.totalAmount || 0)) : 0,
       totalGrams: Number(formatTo3Decimals(p.totalGrams || 0)),
+      totalWithTax: p.totalWithTax !== undefined
+        ? Number(p.totalWithTax)
+        : Number(p.amount || 0) + Number(p.taxAmount || 0) + Number(p.deliveryCharge || 0),
       timestamp: p.timestamp
         ? new Date(p.timestamp).toLocaleString("en-IN", {
             timeZone: "Asia/Kolkata",
@@ -753,12 +755,13 @@ exports.approvePayment = async (req, res) => {
         })
       : null;
 
+    // Calculate totalWithTax for response
+    const totalWithTax = Number(payment.amount || 0) + Number(payment.taxAmount || 0) + Number(payment.deliveryCharge || 0);
     res.json({
       message: "Payment Approved",
       payment: {
         ...payment._doc,
         gold: payment.gold || 0,
-        // Return stored totals (if present) formatted
         totalAmount:
           payment.totalAmount !== undefined
             ? Number(formatTo2Decimals(payment.totalAmount))
@@ -767,6 +770,7 @@ exports.approvePayment = async (req, res) => {
           payment.totalGrams !== undefined
             ? Number(formatTo3Decimals(payment.totalGrams))
             : undefined,
+        totalWithTax: totalWithTax,
         timestamp: istTimestamp,
       },
     });
@@ -774,7 +778,6 @@ exports.approvePayment = async (req, res) => {
     res.status(500).json({ error: "Server error." });
   }
 };
-
 
 
 
@@ -937,6 +940,9 @@ exports.getAllPayments = async (req, res) => {
     res.json(
       enriched.map((p) => ({
         ...p,
+        totalWithTax: p.totalWithTax !== undefined
+          ? Number(p.totalWithTax)
+          : Number(p.amount || 0) + Number(p.taxAmount || 0) + Number(p.deliveryCharge || 0),
         timestamp: p.timestamp
           ? new Date(p.timestamp).toLocaleString("en-IN", {
               timeZone: "Asia/Kolkata",
@@ -1000,90 +1006,99 @@ exports.convertGramToAmount = async (req, res) => {
   }
 };
 
-exports.mobilePayment = async (req, res) => {
-  try {
-    const {
-      mobile,
-      others,
-      amount = 0,
-      gram_allocated = 0,
-      gram = 0,
-      amount_allocated = 0,
-    } = req.body;
+// exports.mobilePayment = async (req, res) => {
+//   try {
+//     const {
+//       mobile,
+//       others,
+//       amount = 0,
+//       gram_allocated = 0,
+//       gram = 0,
+//       amount_allocated = 0,
+//       taxAmount=0,
+//       deliveryCharge = 0,
+//       totalWithTax=0
+//     } = req.body;
 
-    if (!mobile) {
-      return res.status(400).json({ error: "Mobile is required." });
-    }
+//     if (!mobile) {
+//       return res.status(400).json({ error: "Mobile is required." });
+//     }
 
-    // Validate mobile user
-    const User = require("../models/User");
-    const mobileUser = await User.findOne({ mobile });
-    if (!mobileUser) {
-      return res.status(400).json({
-        error: `Mobile number ${mobile} does not exist. Please register mobile first.`,
-      });
-    }
+//     // Validate mobile user
+//     const User = require("../models/User");
+//     const mobileUser = await User.findOne({ mobile });
+//     if (!mobileUser) {
+//       return res.status(400).json({
+//         error: `Mobile number ${mobile} does not exist. Please register mobile first.`,
+//       });
+//     }
 
-    const Payment = require("../models/Payment");
+//     const Payment = require("../models/Payment");
 
-    // ✅ Normalize amount
-    let effectiveAmount = Number(amount);
-    if (effectiveAmount === 0 && gram > 0) {
-      // If payment is given in grams, fallback to amount_allocated
-      effectiveAmount = Number(amount_allocated) || 0;
-    }
+//     // ✅ Normalize amount
+//     let effectiveAmount = Number(amount);
+//     if (effectiveAmount === 0 && gram > 0) {
+//       // If payment is given in grams, fallback to amount_allocated
+//       effectiveAmount = Number(amount_allocated) || 0;
+//     }
 
-    // Always store under the main mobile
-    let paymentData = {
-      mobile,
-      others: others || "",
-      amount: effectiveAmount, // ✅ always have a usable amount
-      gram_allocated,
-      gram,
-      amount_allocated,
-      status: "Payment Confirmation Pending",
-      // timestamp: new Date(),
-      paid_by: req.user?.mobile,
-    };
+//     // Always store under the main mobile
+//     let paymentData = {
+//       mobile,
+//       others: others || "",
+//       amount: effectiveAmount, // ✅ always have a usable amount
+//       gram_allocated,
+//       gram,
+//       amount_allocated,
+//       status: "Payment Confirmation Pending",
+//       taxAmount,
+//       deliveryCharge,
+//       totalWithTax,
+//       // timestamp: new Date(),
+//       paid_by: req.user?.mobile,
+//     };
 
-    // Calculate running total for this mobile
-    const previousPayments = await Payment.find({ mobile });
-    const runningTotal =
-      previousPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0) +
-      Number(effectiveAmount || 0);
+//     // Calculate running total for this mobile
+//     const previousPayments = await Payment.find({ mobile });
+//     const runningTotal =
+//       previousPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0) +
+//       Number(effectiveAmount || 0);
 
-    paymentData.totalAmount = runningTotal;
+//     paymentData.totalAmount = runningTotal;
 
-    const payment = new Payment(paymentData);
-    await payment.save();
+//     const payment = new Payment(paymentData);
+//     await payment.save();
 
-    // Format timestamp to IST (Asia/Kolkata)
-    // const istTimestamp = new Date(payment.timestamp).toLocaleString("en-IN", {
-    //   timeZone: "Asia/Kolkata",
-    // });
-    const istTimestamp = payment.createdAt
-      ? new Date(payment.createdAt).toLocaleString("en-IN", {
-          timeZone: "Asia/Kolkata",
-        })
-      : null;
+//     // Format timestamp to IST (Asia/Kolkata)
+//     // const istTimestamp = new Date(payment.timestamp).toLocaleString("en-IN", {
+//     //   timeZone: "Asia/Kolkata",
+//     // });
+//     const istTimestamp = payment.createdAt
+//       ? new Date(payment.createdAt).toLocaleString("en-IN", {
+//           timeZone: "Asia/Kolkata",
+//         })
+//       : null;
 
-    res.status(201).json({
-      mobile: payment.mobile,
-      others: payment.others,
-      amount: payment.amount,
-      totalAmount: paymentData.totalAmount,
-      timestamp: istTimestamp,
-      status: payment.status,
-      gram: payment.gram,
-      amount_allocated: payment.amount_allocated,
-      gram_allocated: payment.gram_allocated,
-      _id: payment._id,
-    });
-  } catch (err) {
-    console.error("Error in mobilePayment:", err);
-    res.status(500).json({ error: "Server error." });
-  }
-};
+//     res.status(201).json({
+//       mobile: payment.mobile,
+//       others: payment.others,
+//       amount: payment.amount,
+//       totalAmount: paymentData.totalAmount,
+//       timestamp: istTimestamp,
+//       status: payment.status,
+//       taxAmount:payment.taxAmount,
+//       deliveryCharge:payment.deliveryCharge,
+//       totalWithTax:payment.totalAmount,
+//       gram: payment.gram,
+//       amount_allocated: payment.amount_allocated,
+//       gram_allocated: payment.gram_allocated,
+//       _id: payment._id,
+//     });
+//   } catch (err) {
+//     console.error("Error in mobilePayment:", err);
+//     res.status(500).json({ error: "Server error." });
+//   }
+// };
 
 // ✅ Truncate to 3 decimals and pad with zeros
 
@@ -1188,4 +1203,96 @@ function formatTo2Decimals(num) {
 // };
 
 
+exports.mobilePayment = async (req, res) => {
+  try {
+    const {
+      mobile,
+      others,
+      amount = 0,
+      gram_allocated = 0,
+      gram = 0,
+      amount_allocated = 0,
+      taxAmount = 0,
+      deliveryCharge = 0
+    } = req.body;
+
+    if (!mobile) {
+      return res.status(400).json({ error: "Mobile is required." });
+    }
+
+    // Validate mobile user
+    const User = require("../models/User");
+    const mobileUser = await User.findOne({ mobile });
+    if (!mobileUser) {
+      return res.status(400).json({
+        error: `Mobile number ${mobile} does not exist. Please register mobile first.`,
+      });
+    }
+
+    const Payment = require("../models/Payment");
+
+    // ✅ Normalize amount
+    let effectiveAmount = Number(amount);
+    if (effectiveAmount === 0 && gram > 0) {
+      // If payment is given in grams, fallback to amount_allocated
+      effectiveAmount = Number(amount_allocated) || 0;
+    }
+
+    // Calculate totalWithTax (amount + taxAmount + deliveryCharge)
+    const totalWithTax = Number(effectiveAmount) + Number(taxAmount) + Number(deliveryCharge);
+
+    // Always store under the main mobile
+    let paymentData = {
+      mobile,
+      others: others || "",
+      amount: effectiveAmount, // ✅ always have a usable amount
+      gram_allocated,
+      gram,
+      amount_allocated,
+      status: "Payment Confirmation Pending",
+      taxAmount,
+      deliveryCharge,
+      totalWithTax,
+      // timestamp: new Date(),
+      paid_by: req.user?.mobile,
+    };
+
+    // Calculate running total for this mobile
+    const previousPayments = await Payment.find({ mobile });
+    const runningTotal =
+      previousPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0) +
+      Number(effectiveAmount || 0);
+
+    paymentData.totalAmount = runningTotal;
+
+    const payment = new Payment(paymentData);
+    await payment.save();
+
+    // Format timestamp to IST (Asia/Kolkata)
+    const istTimestamp = payment.createdAt
+      ? new Date(payment.createdAt).toLocaleString("en-IN", {
+          timeZone: "Asia/Kolkata",
+        })
+      : null;
+
+    res.status(201).json({
+      mobile: payment.mobile,
+      others: payment.others,
+      amount: payment.amount,
+      totalAmount: paymentData.totalAmount,
+      timestamp: istTimestamp,
+      status: payment.status,
+      taxAmount: payment.taxAmount,
+      deliveryCharge: payment.deliveryCharge,
+        totalWithTax: totalWithTax,
+      gram: payment.gram,
+      amount_allocated: payment.amount_allocated,
+      gram_allocated: payment.gram_allocated,
+      _id: payment._id,
+    });
+  } catch (err) {
+    console.error("Error in mobilePayment:", err);
+    res.status(500).json({ error: "Server error." });
+  }
+};
 

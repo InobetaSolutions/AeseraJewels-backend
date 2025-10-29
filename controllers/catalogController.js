@@ -114,11 +114,12 @@ const User =require("../models/User")
 
 exports.createCatalogPayment1 = async (req, res) => {
   try {
-    // Accept paidAmount and investAmount in the request and sum them to form the payment `amount`.
-    // Example: amount = Number(paidAmount) + Number(investAmount)
-    const { paidAmount = 0, investAmount = 0 } = req.body;
+    // Accept paidAmount, investAmount, taxAmount, deliveryCharge in the request and sum paid+invest for payment `amount`.
+    const { paidAmount = 0, investAmount = 0, taxAmount = 0, deliveryCharge = 0 } = req.body;
     const paid = Number(paidAmount) || 0;
     const invest = Number(investAmount) || 0;
+    const tax = Number(taxAmount) || 0;
+    const delivery = Number(deliveryCharge) || 0;
     const totalAmount = paid + invest;
 
     // Build payload and ensure we persist the paid portion into Paidamount field
@@ -126,6 +127,8 @@ exports.createCatalogPayment1 = async (req, res) => {
       ...req.body,
       amount: totalAmount,
       Paidamount: paid,
+      taxAmount: tax,
+      deliveryCharge: delivery,
     };
 
     const newPayment = new CatalogPayment(payload);
@@ -143,6 +146,8 @@ exports.createCatalogPayment1 = async (req, res) => {
       message: "Catalog Payment Created", 
       data: {
         ...saved._doc,
+        taxAmount: tax,
+        deliveryCharge: delivery,
         createdAt: formatToIST(saved.createdAt),
         updatedAt: formatToIST(saved.updatedAt),
         // timestamp: formatToIST(saved.createdAt)
