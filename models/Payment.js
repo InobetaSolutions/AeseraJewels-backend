@@ -14,6 +14,8 @@ const paymentSchema = new mongoose.Schema({
   amount_allocated: { type: Number },
   gram_allocated: { type: Number },
   paid_amount:{type:Number},
+  taxAmount:{type:Number},
+  deliveryCharge:{type:Number},
   // paid_by: { type: String } // JWT mobile of payer
 }, {
   timestamps: true,
