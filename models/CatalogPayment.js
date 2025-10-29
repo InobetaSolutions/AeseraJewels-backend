@@ -8,7 +8,6 @@ const catalogPaymentSchema = new mongoose.Schema(
     description: { type: String, required: true },
     amount: { type: Number, required: true }, // total value
     grams: { type: Number, required: true }, // total grams
-
     address: { type: String},
     city: { type: String},
     postCode: { type: String},

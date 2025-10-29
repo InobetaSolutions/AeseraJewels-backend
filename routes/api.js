@@ -106,10 +106,10 @@ router.get("/getProductCount", productController.getProductCount);
 const taxController = require("../controllers/taxController");
 const deliveryChargeController = require("../controllers/deliveryChargeController");
 
-router.post("/createTax",auth, taxController.createTax);
+router.post("/createTax", taxController.createTax);
 router.get("/getTax", taxController.getTax);
-router.put("/updateTax", auth, taxController.updateTax);
-router.delete("/deleteTax", auth, taxController.deleteTax);
+router.put("/updateTax",  taxController.updateTax);
+router.delete("/deleteTax",  taxController.deleteTax);
 
 router.post("/createDeliveryCharge",  deliveryChargeController.createDeliveryCharge);
 router.get("/getDeliveryCharge", deliveryChargeController.getDeliveryCharge);
