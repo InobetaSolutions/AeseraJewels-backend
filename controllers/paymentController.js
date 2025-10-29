@@ -440,6 +440,53 @@ exports.getFullPayment = async (req, res) => {
 //   }
 // };
 
+{"working code starts"}
+
+// exports.getPaymentHistory = async (req, res) => {
+//   try {
+//     const { mobile } = req.body;
+//     if (!mobile) {
+//       return res.status(400).json({ error: "Mobile is required." });
+//     }
+
+//     const Payment = require("../models/Payment");
+
+//     // Fetch all payments for display (both where mobile is the number OR others is the number)
+//     const payments = await Payment.find({
+//       $or: [{ mobile }, { others: mobile }],
+//     }).sort({ timestamp: -1 });
+
+//     // Find the latest confirmed payment
+//     const latestConfirmedPayment = payments.find(p => p.status === "Payment Confirmed");
+//     const latestTotalAmount = latestConfirmedPayment ? latestConfirmedPayment.totalAmount || 0 : 0;
+
+//     const formatted = payments.map((p) => ({
+//       ...p._doc,
+//       gold: p.gold || 0,
+//       // Only include totalAmount if payment is confirmed
+//       totalAmount: p.status === "Payment Confirmed" ? Number(formatTo2Decimals(p.totalAmount || 0)) : 0,
+//       totalGrams: Number(formatTo3Decimals(p.totalGrams || 0)),
+//       timestamp: p.timestamp
+//         ? new Date(p.timestamp).toLocaleString("en-IN", {
+//             timeZone: "Asia/Kolkata",
+//           })
+//         : null,
+//     }));
+
+//     // Only return totalAmount if there is a confirmed payment
+//     res.json({
+//       totalAmount: Number(formatTo2Decimals(latestTotalAmount)),
+//       payments: formatted,
+//     });
+//   } catch (err) {
+//     console.error("Error in getPaymentHistory:", err);
+//     res.status(500).json({ error: "Server error." });
+//   }
+// };
+
+{"working code ends"}
+
+
 exports.getPaymentHistory = async (req, res) => {
   try {
     const { mobile } = req.body;
@@ -457,11 +504,12 @@ exports.getPaymentHistory = async (req, res) => {
     // Find the latest confirmed payment
     const latestConfirmedPayment = payments.find(p => p.status === "Payment Confirmed");
     const latestTotalAmount = latestConfirmedPayment ? latestConfirmedPayment.totalAmount || 0 : 0;
+    const latestTotalGrams = latestConfirmedPayment ? latestConfirmedPayment.totalGrams || 0 : 0;
 
     const formatted = payments.map((p) => ({
       ...p._doc,
       gold: p.gold || 0,
-      // Only include totalAmount if payment is confirmed
+      // Only include totalAmount and totalGrams if payment is confirmed
       totalAmount: p.status === "Payment Confirmed" ? Number(formatTo2Decimals(p.totalAmount || 0)) : 0,
       totalGrams: Number(formatTo3Decimals(p.totalGrams || 0)),
       timestamp: p.timestamp
@@ -471,9 +519,10 @@ exports.getPaymentHistory = async (req, res) => {
         : null,
     }));
 
-    // Only return totalAmount if there is a confirmed payment
+    // Return both totalAmount and totalGrams from the latest confirmed payment
     res.json({
       totalAmount: Number(formatTo2Decimals(latestTotalAmount)),
+      totalGrams: Number(formatTo3Decimals(latestTotalGrams)),
       payments: formatted,
     });
   } catch (err) {
@@ -539,6 +588,96 @@ exports.getPaymentHistory = async (req, res) => {
 //   }
 // };
 {}
+// exports.approvePayment = async (req, res) => {
+//   try {
+//     const { id } = req.body;
+//     if (!id) {
+//       return res.status(400).json({ error: "Payment id is required." });
+//     }
+//     let payment = await Payment.findOne({
+//       _id: id,
+//       status: { $in: ["Payment Confirmation Pending", "Payment Cancelled"] },
+//     });
+//     if (!payment) {
+//       return res
+//         .status(404)
+//         .json({ error: "No pending payment found for this id." });
+//     }
+//     // Allocate gold on approval
+//     const GoldPrice = require("../models/GoldPrice");
+//     const lastRate = await GoldPrice.findOne().sort({ timestamp: -1 });
+//     if (!lastRate || !lastRate.price_gram_24k) {
+//       return res
+//         .status(500)
+//         .json({ error: "Current gold rate not available." });
+//     }
+//     const goldRate = lastRate.price_gram_24k;
+//     const goldAllocated = parseFloat((payment.amount / goldRate).toFixed(4));
+//     payment.gold = goldAllocated;
+//     payment.status = "Payment Confirmed";
+    
+//     // Recalculate running totalAmount including this payment and all previous confirmed payments
+//     try {
+//       // Get the previous confirmed payment's totalAmount
+//       const previousConfirmed = await Payment.findOne({
+//         mobile: payment.mobile,
+//         status: "Payment Confirmed",
+//         _id: { $ne: payment._id }
+//       }).sort({ createdAt: -1 });
+
+//       // Get previous totalAmount (or 0 if no previous payment)
+//       const previousTotal = previousConfirmed ? Number(previousConfirmed.totalAmount || 0) : 0;
+      
+//       // Calculate current payment's amount (regular or allocated)
+//       const currentAmount = Number(payment.amount || 0);
+//       const currentAllocatedAmount = Number(payment.amount_allocated || 0);
+//       const paymentAmount = currentAmount > 0 ? currentAmount : currentAllocatedAmount;
+      
+//       // New total is previous total plus current payment
+//       payment.totalAmount = Number(formatTo2Decimals(previousTotal + paymentAmount));
+        
+//     } catch (e) {
+//       // If something goes wrong computing totals, still save payment with its own amount as totalAmount
+//       console.error("Failed to compute totalAmount:", e.message);
+//       payment.totalAmount = Number(payment.amount || 0);
+//     }
+
+//     await payment.save();
+//     // Format timestamp to IST (Asia/Kolkata)
+//     // const istTimestamp = payment.timestamp
+//     //   ? new Date(payment.timestamp).toLocaleString("en-IN", {
+//     //       timeZone: "Asia/Kolkata",
+//     //     })
+//     //   : null;
+//     const istTimestamp = payment.updatedAt
+//       ? new Date(payment.updatedAt).toLocaleString("en-IN", {
+//           timeZone: "Asia/Kolkata",
+//         })
+//       : null;
+
+//     res.json({
+//       message: "Payment Approved",
+//       payment: {
+//         ...payment._doc,
+//         gold: payment.gold || 0,
+//         // Return stored totals (if present) formatted
+//         totalAmount:
+//           payment.totalAmount !== undefined
+//             ? Number(formatTo2Decimals(payment.totalAmount))
+//             : 0,
+//         totalGrams:
+//           payment.totalGrams !== undefined
+//             ? Number(formatTo3Decimals(payment.totalGrams))
+//             : undefined,
+//         timestamp: istTimestamp,
+//       },
+//     });
+//   } catch (err) {
+//     res.status(500).json({ error: "Server error." });
+//   }
+// };
+{}
+
 exports.approvePayment = async (req, res) => {
   try {
     const { id } = req.body;
@@ -567,30 +706,38 @@ exports.approvePayment = async (req, res) => {
     payment.gold = goldAllocated;
     payment.status = "Payment Confirmed";
     
-    // Recalculate running totalAmount including this payment and all previous confirmed payments
+    // Recalculate running totalAmount and totalGrams including this payment and all previous confirmed payments
     try {
-      // Get the previous confirmed payment's totalAmount
+      // Get the previous confirmed payment's totalAmount and totalGrams
       const previousConfirmed = await Payment.findOne({
         mobile: payment.mobile,
         status: "Payment Confirmed",
         _id: { $ne: payment._id }
       }).sort({ createdAt: -1 });
 
-      // Get previous totalAmount (or 0 if no previous payment)
+      // Get previous totals (or 0 if no previous payment)
       const previousTotal = previousConfirmed ? Number(previousConfirmed.totalAmount || 0) : 0;
+      const previousTotalGrams = previousConfirmed ? Number(previousConfirmed.totalGrams || 0) : 0;
       
       // Calculate current payment's amount (regular or allocated)
       const currentAmount = Number(payment.amount || 0);
       const currentAllocatedAmount = Number(payment.amount_allocated || 0);
       const paymentAmount = currentAmount > 0 ? currentAmount : currentAllocatedAmount;
       
-      // New total is previous total plus current payment
+      // Calculate current payment's grams (regular + allocated)
+      const currentGram = Number(payment.gram || 0);
+      const currentGramAllocated = Number(payment.gram_allocated || 0);
+      const paymentGrams = currentGram + currentGramAllocated;
+      
+      // New totals are previous totals plus current payment
       payment.totalAmount = Number(formatTo2Decimals(previousTotal + paymentAmount));
+      payment.totalGrams = Number(formatTo3Decimals(previousTotalGrams + paymentGrams));
         
     } catch (e) {
-      // If something goes wrong computing totals, still save payment with its own amount as totalAmount
-      console.error("Failed to compute totalAmount:", e.message);
+      // If something goes wrong computing totals, still save payment with its own values
+      console.error("Failed to compute totals:", e.message);
       payment.totalAmount = Number(payment.amount || 0);
+      payment.totalGrams = Number((payment.gram || 0) + (payment.gram_allocated || 0));
     }
 
     await payment.save();
@@ -627,7 +774,6 @@ exports.approvePayment = async (req, res) => {
     res.status(500).json({ error: "Server error." });
   }
 };
-{}
 
 
 
@@ -854,103 +1000,6 @@ exports.convertGramToAmount = async (req, res) => {
   }
 };
 
-// exports.mobilePayment = async (req, res) => {
-//   try {
-//     const {
-//       mobile,
-//       others,
-//       amount = 0,
-//       gram_allocated = 0,
-//       gram = 0,
-//       amount_allocated = 0,
-//     } = req.body;
-
-//     if (!mobile) {
-//       return res.status(400).json({ error: "Mobile is required." });
-//     }
-
-//     // Validate mobile user
-//     const User = require("../models/User");
-//     const mobileUser = await User.findOne({ mobile });
-//     if (!mobileUser) {
-//       return res.status(400).json({
-//         error: `Mobile number ${mobile} does not exist. Please register mobile first.`,
-//       });
-//     }
-
-//     const Payment = require("../models/Payment");
-
-//     // ✅ Normalize amount
-//     let effectiveAmount = Number(amount);
-//     if (effectiveAmount === 0 && gram > 0) {
-//       // If payment is given in grams, fallback to amount_allocated
-//       effectiveAmount = Number(amount_allocated) || 0;
-//     }
-
-//     // Always store under the main mobile
-//     let paymentData = {
-//       mobile,
-//       others: others || "",
-//       amount: effectiveAmount, // ✅ always have a usable amount
-//       gram_allocated,
-//       gram,
-//       amount_allocated,
-//       status: "Payment Confirmation Pending",
-//       // timestamp: new Date(),
-//       paid_by: req.user?.mobile,
-//     };
-
-//     // Calculate running total for this mobile
-//     const previousPayments = await Payment.find({ mobile });
-//     const runningTotal =
-//       previousPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0) +
-//       Number(effectiveAmount || 0);
-
-//     paymentData.totalAmount = runningTotal;
-
-//     const payment = new Payment(paymentData);
-//     await payment.save();
-
-//     // Format timestamp to IST (Asia/Kolkata)
-//     // const istTimestamp = new Date(payment.timestamp).toLocaleString("en-IN", {
-//     //   timeZone: "Asia/Kolkata",
-//     // });
-//     const istTimestamp = payment.createdAt
-//       ? new Date(payment.createdAt).toLocaleString("en-IN", {
-//           timeZone: "Asia/Kolkata",
-//         })
-//       : null;
-
-//     res.status(201).json({
-//       mobile: payment.mobile,
-//       others: payment.others,
-//       amount: payment.amount,
-//       totalAmount: paymentData.totalAmount,
-//       timestamp: istTimestamp,
-//       status: payment.status,
-//       gram: payment.gram,
-//       amount_allocated: payment.amount_allocated,
-//       gram_allocated: payment.gram_allocated,
-//       _id: payment._id,
-//     });
-//   } catch (err) {
-//     console.error("Error in mobilePayment:", err);
-//     res.status(500).json({ error: "Server error." });
-//   }
-// };
-
-// ✅ Truncate to 3 decimals and pad with zeros
-
-function formatTo3Decimals(num) {
-  if (num == null) return "0.000";
-  const truncated = Math.floor(Number(num) * 1000) / 1000;
-  return truncated.toFixed(3); // ensures padding
-}
-function formatTo2Decimals(num) {
-  if (num == null) return "0.00";
-  const truncated = Math.floor(Number(num) * 100) / 100;
-  return truncated.toFixed(2); // ensures padding
-}
 exports.mobilePayment = async (req, res) => {
   try {
     const {
@@ -979,68 +1028,164 @@ exports.mobilePayment = async (req, res) => {
 
     // ✅ Normalize amount
     let effectiveAmount = Number(amount);
-    let effectiveAmountAllocated = 0;
-    
-    // Only use amount_allocated if we have gram but no amount
     if (effectiveAmount === 0 && gram > 0) {
-      effectiveAmount = 0;
-      effectiveAmountAllocated = Number(amount_allocated) || 0;
+      // If payment is given in grams, fallback to amount_allocated
+      effectiveAmount = Number(amount_allocated) || 0;
     }
 
-    // ✅ Apply 3-decimal formatting
-    effectiveAmount = Number(formatTo3Decimals(effectiveAmount));
-
+    // Always store under the main mobile
     let paymentData = {
       mobile,
       others: others || "",
-      amount: effectiveAmount,
-      gram_allocated: Number(formatTo3Decimals(gram_allocated)),
-      gram: Number(formatTo3Decimals(gram)),
-      amount_allocated: Number(formatTo2Decimals(effectiveAmountAllocated)), // Only use allocated amount for gram-based payments
+      amount: effectiveAmount, // ✅ always have a usable amount
+      gram_allocated,
+      gram,
+      amount_allocated,
       status: "Payment Confirmation Pending",
+      // timestamp: new Date(),
       paid_by: req.user?.mobile,
     };
+
+    // Calculate running total for this mobile
+    const previousPayments = await Payment.find({ mobile });
+    const runningTotal =
+      previousPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0) +
+      Number(effectiveAmount || 0);
+
+    paymentData.totalAmount = runningTotal;
 
     const payment = new Payment(paymentData);
     await payment.save();
 
-    // Format IST timestamp
+    // Format timestamp to IST (Asia/Kolkata)
+    // const istTimestamp = new Date(payment.timestamp).toLocaleString("en-IN", {
+    //   timeZone: "Asia/Kolkata",
+    // });
     const istTimestamp = payment.createdAt
       ? new Date(payment.createdAt).toLocaleString("en-IN", {
           timeZone: "Asia/Kolkata",
         })
       : null;
 
-    // res.status(201).json({
-    //   mobile: payment.mobile,
-    //   others: payment.others,
-    //   amount: formatTo2Decimals(payment.amount),
-    //   totalAmount: formatTo2Decimals(paymentData.totalAmount),
-    //   timestamp: istTimestamp,
-    //   status: payment.status,
-    //   gram: formatTo3Decimals(payment.gram),
-    //   amount_allocated: formatTo2Decimals(payment.amount_allocated),
-    //   gram_allocated: formatTo3Decimals(payment.gram_allocated),
-    //   _id: payment._id,
-    // });
     res.status(201).json({
       mobile: payment.mobile,
       others: payment.others,
-      amount: Number(formatTo2Decimals(payment.amount)), // ✅ number
-      
+      amount: payment.amount,
+      totalAmount: paymentData.totalAmount,
       timestamp: istTimestamp,
       status: payment.status,
-      gram: Number(formatTo3Decimals(payment.gram)), // ✅ number
-      amount_allocated: Number(formatTo2Decimals(payment.amount_allocated)), // ✅ number
-      gram_allocated: Number(formatTo3Decimals(payment.gram_allocated)), // ✅ number
+      gram: payment.gram,
+      amount_allocated: payment.amount_allocated,
+      gram_allocated: payment.gram_allocated,
       _id: payment._id,
     });
-
   } catch (err) {
     console.error("Error in mobilePayment:", err);
     res.status(500).json({ error: "Server error." });
   }
 };
+
+// ✅ Truncate to 3 decimals and pad with zeros
+
+function formatTo3Decimals(num) {
+  if (num == null) return "0.000";
+  const truncated = Math.floor(Number(num) * 1000) / 1000;
+  return truncated.toFixed(3); // ensures padding
+}
+function formatTo2Decimals(num) {
+  if (num == null) return "0.00";
+  const truncated = Math.floor(Number(num) * 100) / 100;
+  return truncated.toFixed(2); // ensures padding
+}
+// exports.mobilePayment = async (req, res) => {
+//   try {
+//     const {
+//       mobile,
+//       others,
+//       amount = 0,
+//       gram_allocated = 0,
+//       gram = 0,
+//       amount_allocated = 0,
+//     } = req.body;
+
+//     if (!mobile) {
+//       return res.status(400).json({ error: "Mobile is required." });
+//     }
+
+//     // Validate mobile user
+//     const User = require("../models/User");
+//     const mobileUser = await User.findOne({ mobile });
+//     if (!mobileUser) {
+//       return res.status(400).json({
+//         error: `Mobile number ${mobile} does not exist. Please register mobile first.`,
+//       });
+//     }
+
+//     const Payment = require("../models/Payment");
+
+//     // ✅ Normalize amount
+//     let effectiveAmount = Number(amount);
+//     let effectiveAmountAllocated = 0;
+    
+//     // Only use amount_allocated if we have gram but no amount
+//     if (effectiveAmount === 0 && gram > 0) {
+//       effectiveAmount = 0;
+//       effectiveAmountAllocated = Number(amount_allocated) || 0;
+//     }
+
+//     // ✅ Apply 3-decimal formatting
+//     effectiveAmount = Number(formatTo3Decimals(effectiveAmount));
+
+//     let paymentData = {
+//       mobile,
+//       others: others || "",
+//       amount: effectiveAmount,
+//       gram_allocated: Number(formatTo3Decimals(gram_allocated)),
+//       gram: Number(formatTo3Decimals(gram)),
+//       amount_allocated: Number(formatTo2Decimals(effectiveAmountAllocated)), // Only use allocated amount for gram-based payments
+//       status: "Payment Confirmation Pending",
+//       paid_by: req.user?.mobile,
+//     };
+
+//     const payment = new Payment(paymentData);
+//     await payment.save();
+
+//     // Format IST timestamp
+//     const istTimestamp = payment.createdAt
+//       ? new Date(payment.createdAt).toLocaleString("en-IN", {
+//           timeZone: "Asia/Kolkata",
+//         })
+//       : null;
+
+//     // res.status(201).json({
+//     //   mobile: payment.mobile,
+//     //   others: payment.others,
+//     //   amount: formatTo2Decimals(payment.amount),
+//     //   totalAmount: formatTo2Decimals(paymentData.totalAmount),
+//     //   timestamp: istTimestamp,
+//     //   status: payment.status,
+//     //   gram: formatTo3Decimals(payment.gram),
+//     //   amount_allocated: formatTo2Decimals(payment.amount_allocated),
+//     //   gram_allocated: formatTo3Decimals(payment.gram_allocated),
+//     //   _id: payment._id,
+//     // });
+//     res.status(201).json({
+//       mobile: payment.mobile,
+//       others: payment.others,
+//       amount: Number(formatTo2Decimals(payment.amount)), // ✅ number
+//       timestamp: istTimestamp,
+//       status: payment.status,
+//       gram: Number(formatTo3Decimals(payment.gram)), // ✅ number
+//       amount_allocated: Number(formatTo2Decimals(payment.amount_allocated)), // ✅ number
+//       gram_allocated: Number(formatTo3Decimals(payment.gram_allocated)), // ✅ number
+//       _id: payment._id,
+//     });
+
+//   } catch (err) {
+//     console.error("Error in mobilePayment:", err);
+//     res.status(500).json({ error: "Server error." });
+//   }
+// };
 
 
 
