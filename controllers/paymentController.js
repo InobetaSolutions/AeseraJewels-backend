@@ -487,6 +487,52 @@ exports.getFullPayment = async (req, res) => {
 // {"working code ends"}
 
 
+// exports.getPaymentHistory = async (req, res) => {
+//   try {
+//     const { mobile } = req.body;
+//     if (!mobile) {
+//       return res.status(400).json({ error: "Mobile is required." });
+//     }
+
+//     const Payment = require("../models/Payment");
+
+//     // Fetch all payments for display (both where mobile is the number OR others is the number)
+//     const payments = await Payment.find({
+//       $or: [{ mobile }, { others: mobile }],
+//     }).sort({ timestamp: -1 });
+
+//     // Find the latest confirmed payment
+//     const latestConfirmedPayment = payments.find(p => p.status === "Payment Confirmed");
+//     const latestTotalAmount = latestConfirmedPayment ? latestConfirmedPayment.totalAmount || 0 : 0;
+//     const latestTotalGrams = latestConfirmedPayment ? latestConfirmedPayment.totalGrams || 0 : 0;
+
+//     const formatted = payments.map((p) => ({
+//       ...p._doc,
+//       gold: p.gold || 0,
+//       // totalAmount: p.status === "Payment Confirmed" ? Number(formatTo2Decimals(p.totalAmount || 0)) : 0,
+//       // totalGrams: Number(formatTo3Decimals(p.totalGrams || 0)),
+//       totalWithTax: p.totalWithTax !== undefined
+//         ? Number(p.totalWithTax)
+//         : Number(p.amount || 0) + Number(p.taxAmount || 0) + Number(p.deliveryCharge || 0),
+//       timestamp: p.timestamp
+//         ? new Date(p.timestamp).toLocaleString("en-IN", {
+//             timeZone: "Asia/Kolkata",
+//           })
+//         : null,
+//     }));
+
+//     // Return both totalAmount and totalGrams from the latest confirmed payment
+//     res.json({
+//       totalAmount: Number(formatTo2Decimals(latestTotalAmount)),
+//       totalGrams: Number(formatTo3Decimals(latestTotalGrams)),
+//       payments: formatted,
+//     });
+//   } catch (err) {
+//     console.error("Error in getPaymentHistory:", err);
+//     res.status(500).json({ error: "Server error." });
+//   }
+// };
+
 exports.getPaymentHistory = async (req, res) => {
   try {
     const { mobile } = req.body;
@@ -496,44 +542,34 @@ exports.getPaymentHistory = async (req, res) => {
 
     const Payment = require("../models/Payment");
 
-    // Fetch all payments for display (both where mobile is the number OR others is the number)
-    const payments = await Payment.find({
-      $or: [{ mobile }, { others: mobile }],
-    }).sort({ timestamp: -1 });
+    // Get all payments for this mobile
+    const payments = await Payment.find({ mobile }).sort({ createdAt: -1 });
 
-    // Find the latest confirmed payment
-    const latestConfirmedPayment = payments.find(p => p.status === "Payment Confirmed");
-    const latestTotalAmount = latestConfirmedPayment ? latestConfirmedPayment.totalAmount || 0 : 0;
-    const latestTotalGrams = latestConfirmedPayment ? latestConfirmedPayment.totalGrams || 0 : 0;
+    // Find the latest confirmed payment for totals
+    const latestConfirmed = payments.find(p => p.status === "Payment Confirmed");
 
+    const latestTotalAmount = latestConfirmed ? Number(latestConfirmed.totalAmount || 0) : 0;
+    const latestTotalGrams = latestConfirmed ? Number(latestConfirmed.totalGrams || 0) : 0;
+
+    // Format payments with IST timestamp
     const formatted = payments.map((p) => ({
       ...p._doc,
-      gold: p.gold || 0,
-      // totalAmount: p.status === "Payment Confirmed" ? Number(formatTo2Decimals(p.totalAmount || 0)) : 0,
-      // totalGrams: Number(formatTo3Decimals(p.totalGrams || 0)),
-      totalWithTax: p.totalWithTax !== undefined
-        ? Number(p.totalWithTax)
-        : Number(p.amount || 0) + Number(p.taxAmount || 0) + Number(p.deliveryCharge || 0),
-      timestamp: p.timestamp
-        ? new Date(p.timestamp).toLocaleString("en-IN", {
-            timeZone: "Asia/Kolkata",
-          })
+      timestamp: p.updatedAt
+        ? new Date(p.updatedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
         : null,
+      totalAmount: Number(p.totalAmount || 0),
+      totalGrams: Number(p.totalGrams || 0),
     }));
 
-    // Return both totalAmount and totalGrams from the latest confirmed payment
     res.json({
-      totalAmount: Number(formatTo2Decimals(latestTotalAmount)),
-      totalGrams: Number(formatTo3Decimals(latestTotalGrams)),
+      totalAmount: latestTotalAmount,
+      totalGrams: latestTotalGrams,
       payments: formatted,
     });
   } catch (err) {
-    console.error("Error in getPaymentHistory:", err);
     res.status(500).json({ error: "Server error." });
   }
 };
-
-
 
 // Approve payment by ObjectId
 
