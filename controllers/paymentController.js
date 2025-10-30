@@ -210,6 +210,19 @@ exports.setAllotment = async (req, res) => {
         : 0;
     console.log("Total amount2 for mobile:", mobile, totalAmount2);
 
+    // Persist the updated totals to the latest confirmed Payment for this mobile
+    try {
+      const latestConfirmed = await Payment.findOne({ mobile, status: "Payment Confirmed" }).sort({ createdAt: -1 });
+      if (latestConfirmed) {
+        latestConfirmed.totalGrams = Number(totalGrams2);
+        latestConfirmed.totalAmount = Number(totalAmount2);
+        await latestConfirmed.save();
+        console.log("Updated latest confirmed payment totals for mobile:", mobile, latestConfirmed._id);
+      }
+    } catch (e) {
+      console.error("Failed to persist updated totals after allotment:", e.message);
+    }
+
     return res.json({
       message: "Allotment recorded",
       mobile,

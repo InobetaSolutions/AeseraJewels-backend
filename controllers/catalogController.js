@@ -515,7 +515,7 @@ exports.approveCatalogPayment = async (req, res) => {
       });
     }
 
-    // If this catalog payment had an investAmount, subtract it from the user's Payment.totalAmount and totalGrams proportionally
+    // If this catalog payment had an investAmount, subtract it from the latest confirmed Payment's stored totals
     try {
       const Payment = require("../models/Payment");
       const invest = Number(payment.investAmount || 0);
@@ -527,12 +527,10 @@ exports.approveCatalogPayment = async (req, res) => {
         }).sort({ createdAt: -1 });
 
         if (latestPayment) {
-          // Reduce totalAmount
+          // Use stored running totals
           const oldTotalAmount = Number(latestPayment.totalAmount || 0);
           const oldTotalGrams = Number(latestPayment.totalGrams || 0);
           const newTotalAmount = Math.max(0, oldTotalAmount - invest);
-
-          // Proportional reduction for grams
           let newTotalGrams = oldTotalGrams;
           if (oldTotalAmount > 0) {
             newTotalGrams = Number((oldTotalGrams * (newTotalAmount / oldTotalAmount)).toFixed(4));
@@ -540,7 +538,6 @@ exports.approveCatalogPayment = async (req, res) => {
           if (newTotalAmount === 0) {
             newTotalGrams = 0;
           }
-
           latestPayment.totalAmount = newTotalAmount;
           latestPayment.totalGrams = newTotalGrams;
           await latestPayment.save();
