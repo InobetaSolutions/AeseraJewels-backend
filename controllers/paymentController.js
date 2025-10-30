@@ -770,7 +770,24 @@ exports.approvePayment = async (req, res) => {
       // New totals are previous totals plus current payment
       payment.totalAmount = Number(formatTo2Decimals(previousTotal + paymentAmount));
       payment.totalGrams = Number(formatTo3Decimals(previousTotalGrams + paymentGrams));
+          const totalWithTax = Number(payment.amount || 0) + Number(payment.taxAmount || 0) + Number(payment.deliveryCharge || 0);
+    res.json({
+      message: "Payment Approved",
+      payment: {
+        ...payment._doc,
+        gold: payment.gold || 0,
+        totalAmount:
+          payment.totalAmount !== undefined
+            ? Number(formatTo2Decimals(payment.totalAmount))
+            : 0,
+        totalGrams:
+          payment.totalGrams !== undefined
+            ? Number(formatTo3Decimals(payment.totalGrams))
+            : undefined,
+        totalWithTax: totalWithTax,
         
+      },
+    });  
     } catch (e) {
       // If something goes wrong computing totals, still save payment with its own values
       console.error("Failed to compute totals:", e.message);
@@ -792,24 +809,24 @@ exports.approvePayment = async (req, res) => {
       : null;
 
     // Calculate totalWithTax for response
-    const totalWithTax = Number(payment.amount || 0) + Number(payment.taxAmount || 0) + Number(payment.deliveryCharge || 0);
-    res.json({
-      message: "Payment Approved",
-      payment: {
-        ...payment._doc,
-        gold: payment.gold || 0,
-        totalAmount:
-          payment.totalAmount !== undefined
-            ? Number(formatTo2Decimals(payment.totalAmount))
-            : 0,
-        totalGrams:
-          payment.totalGrams !== undefined
-            ? Number(formatTo3Decimals(payment.totalGrams))
-            : undefined,
-        totalWithTax: totalWithTax,
-        timestamp: istTimestamp,
-      },
-    });
+    // const totalWithTax = Number(payment.amount || 0) + Number(payment.taxAmount || 0) + Number(payment.deliveryCharge || 0);
+    // res.json({
+    //   message: "Payment Approved",
+    //   payment: {
+    //     ...payment._doc,
+    //     gold: payment.gold || 0,
+    //     totalAmount:
+    //       payment.totalAmount !== undefined
+    //         ? Number(formatTo2Decimals(payment.totalAmount))
+    //         : 0,
+    //     totalGrams:
+    //       payment.totalGrams !== undefined
+    //         ? Number(formatTo3Decimals(payment.totalGrams))
+    //         : undefined,
+    //     totalWithTax: totalWithTax,
+    //     timestamp: istTimestamp,
+    //   },
+    // });
   } catch (err) {
     res.status(500).json({ error: "Server error." });
   }
