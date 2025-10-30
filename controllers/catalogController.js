@@ -493,7 +493,7 @@ exports.approveCatalogPayment = async (req, res) => {
       });
     }
 
-    // Update only if status is allowed
+    // Approve the catalog payment
     const payment = await CatalogPayment.findOneAndUpdate(
       {
         _id: catalogID,
@@ -515,34 +515,38 @@ exports.approveCatalogPayment = async (req, res) => {
       });
     }
 
-    // If this catalog payment had an investAmount, subtract it from the user's Payment.totalAmount
+    // If this catalog payment had an investAmount, subtract it from the user's Payment.totalAmount and totalGrams proportionally
     try {
       const Payment = require("../models/Payment");
       const invest = Number(payment.investAmount || 0);
       if (invest > 0) {
-        // Decrease totalAmount for all payments for this mobile
-        await Payment.updateMany({ mobile: mobileNumber }, { $inc: { totalAmount: -invest } });
-        // Ensure we don't leave negative totals
-        await Payment.updateMany({ mobile: mobileNumber, totalAmount: { $lt: 0 } }, { $set: { totalAmount: 0 } });
+        // Find the latest confirmed payment
+        const latestPayment = await Payment.findOne({
+          mobile: mobileNumber,
+          status: "Payment Confirmed"
+        }).sort({ createdAt: -1 });
 
-          // Reduce totalGrams in direct proportion to investAmount/totalAmount
-          // Find all payments for this mobile
-          const payments = await Payment.find({ mobile: mobileNumber });
-          for (const p of payments) {
-            const totalAmount = Number(p.totalAmount || 0);
-            const totalGrams = Number(p.totalGrams || 0);
-            if (totalAmount > 0 && totalGrams > 0) {
-              // Calculate grams to reduce
-              let gramsToReduce = (invest / totalAmount) * totalGrams;
-              gramsToReduce = Math.min(gramsToReduce, totalGrams); // Don't reduce below zero
-              const newTotalGrams = Number((totalGrams - gramsToReduce).toFixed(4));
-              p.totalGrams = newTotalGrams >= 0 ? newTotalGrams : 0;
-              await p.save();
-            }
+        if (latestPayment) {
+          // Reduce totalAmount
+          const oldTotalAmount = Number(latestPayment.totalAmount || 0);
+          const oldTotalGrams = Number(latestPayment.totalGrams || 0);
+          const newTotalAmount = Math.max(0, oldTotalAmount - invest);
+
+          // Proportional reduction for grams
+          let newTotalGrams = oldTotalGrams;
+          if (oldTotalAmount > 0) {
+            newTotalGrams = Number((oldTotalGrams * (newTotalAmount / oldTotalAmount)).toFixed(4));
           }
+          if (newTotalAmount === 0) {
+            newTotalGrams = 0;
+          }
+
+          latestPayment.totalAmount = newTotalAmount;
+          latestPayment.totalGrams = newTotalGrams;
+          await latestPayment.save();
+        }
       }
     } catch (e) {
-      // Log error but don't block approval response
       console.error("Failed to adjust Payment totals after catalog approval:", e.message);
     }
 
