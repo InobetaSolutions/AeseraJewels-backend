@@ -51,7 +51,7 @@ router.get("/get-products", productController.getProducts);
 router.post("/getpaymenthistory", auth, paymentController.getPaymentHistory);
 router.post("/convert-gram-to-amount", paymentController.convertGramToAmount);
 router.post("/newPayment", auth, paymentController.mobilePayment);
-router.post("/cancelPayment", auth, paymentController.cancelPayment);
+router.post("/cancelPayment",  paymentController.cancelPayment);
 router.get(
   "/getAllCancelledPayments",
   paymentController.getAllCancelledPayments
