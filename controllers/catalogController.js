@@ -208,7 +208,7 @@ exports.getCatalogPayments = async (req, res) => {
   try {
     const payments = await CatalogPayment.find({
       paymentStatus: "Payment Confirmation Pending",
-    });
+    }).sort({ createdAt: -1 });
     // {
     //   allotmentStatus: "Payment Approved - Delivery is in Process",
     // }
