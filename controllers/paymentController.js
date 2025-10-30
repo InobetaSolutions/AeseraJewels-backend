@@ -509,8 +509,8 @@ exports.getPaymentHistory = async (req, res) => {
     const formatted = payments.map((p) => ({
       ...p._doc,
       gold: p.gold || 0,
-      totalAmount: p.status === "Payment Confirmed" ? Number(formatTo2Decimals(p.totalAmount || 0)) : 0,
-      totalGrams: Number(formatTo3Decimals(p.totalGrams || 0)),
+      // totalAmount: p.status === "Payment Confirmed" ? Number(formatTo2Decimals(p.totalAmount || 0)) : 0,
+      // totalGrams: Number(formatTo3Decimals(p.totalGrams || 0)),
       totalWithTax: p.totalWithTax !== undefined
         ? Number(p.totalWithTax)
         : Number(p.amount || 0) + Number(p.taxAmount || 0) + Number(p.deliveryCharge || 0),
