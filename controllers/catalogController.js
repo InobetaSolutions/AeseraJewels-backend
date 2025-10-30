@@ -397,6 +397,91 @@ exports.getUserCatalog = async (req, res) => {
 
 {"ends"}
 
+// exports.approveCatalogPayment = async (req, res) => {
+//   try {
+//     const { mobileNumber, catalogID } = req.body;
+
+//     if (!mobileNumber || !catalogID) {
+//       return res.status(400).json({
+//         status: false,
+//         message: "Mobile number and catalogID are required",
+//       });
+//     }
+
+//     // Update only if status is allowed
+//     const payment = await CatalogPayment.findOneAndUpdate(
+//       {
+//         _id: catalogID,
+//         mobileNumber,
+//         paymentStatus: {
+//           $in: ["Payment Confirmation Pending", "Payment Cancelled"],
+//         },
+//       },
+//       {
+//         $set: { paymentStatus: "Payment Approved - Delivery is in Process" },
+//       },
+//       { new: true }
+//     );
+
+//     if (!payment) {
+//       return res.status(404).json({
+//         status: false,
+//         message: "Catalog payment not found or already approved",
+//       });
+//     }
+
+//     // If this catalog payment had an investAmount, subtract it from the user's Payment.totalAmount
+//     try {
+//       const Payment = require("../models/Payment");
+//       const invest = Number(payment.investAmount || 0);
+//       if (invest > 0) {
+//         // Decrease totalAmount for all payments for this mobile
+//         await Payment.updateMany({ mobile: mobileNumber }, { $inc: { totalAmount: -invest } });
+//         // Ensure we don't leave negative totals
+//         await Payment.updateMany({ mobile: mobileNumber, totalAmount: { $lt: 0 } }, { $set: { totalAmount: 0 } });
+
+//         // Reduce totalGrams by investAmount/goldRate
+//         const GoldPrice = require("../models/GoldPrice");
+//         const lastRate = await GoldPrice.findOne().sort({ timestamp: -1 });
+//         let goldRate = lastRate && lastRate.price_gram_24k ? Number(lastRate.price_gram_24k) : 0;
+//         if (goldRate > 0) {
+//           const gramsToReduce = Number((invest / goldRate).toFixed(4));
+//           await Payment.updateMany({ mobile: mobileNumber }, { $inc: { totalGrams: -gramsToReduce } });
+//           // Ensure we don't leave negative totalGrams
+//           await Payment.updateMany({ mobile: mobileNumber, totalGrams: { $lt: 0 } }, { $set: { totalGrams: 0 } });
+//         }
+//       }
+//     } catch (e) {
+//       // Log error but don't block approval response
+//       console.error("Failed to adjust Payment totals after catalog approval:", e.message);
+//     }
+
+//     // Format timestamps to IST (Asia/Kolkata)
+//     const formatToIST = (date) => {
+//       return date ? new Date(date).toLocaleString("en-IN", {
+//         timeZone: "Asia/Kolkata",
+//       }) : null;
+//     };
+
+//     res.status(200).json({
+//       status: true,
+//       message: "Payment approved successfully",
+//       data: {
+//         ...payment._doc,
+//         createdAt: formatToIST(payment.createdAt),
+//         updatedAt: formatToIST(payment.updatedAt),
+//         timestamp: formatToIST(payment.updatedAt)
+//       }
+//     });
+//   } catch (err) {
+//     res.status(500).json({ status: false, message: err.message });
+//   }
+// };
+
+
+{
+}
+
 exports.approveCatalogPayment = async (req, res) => {
   try {
     const { mobileNumber, catalogID } = req.body;
@@ -440,16 +525,21 @@ exports.approveCatalogPayment = async (req, res) => {
         // Ensure we don't leave negative totals
         await Payment.updateMany({ mobile: mobileNumber, totalAmount: { $lt: 0 } }, { $set: { totalAmount: 0 } });
 
-        // Reduce totalGrams by investAmount/goldRate
-        const GoldPrice = require("../models/GoldPrice");
-        const lastRate = await GoldPrice.findOne().sort({ timestamp: -1 });
-        let goldRate = lastRate && lastRate.price_gram_24k ? Number(lastRate.price_gram_24k) : 0;
-        if (goldRate > 0) {
-          const gramsToReduce = Number((invest / goldRate).toFixed(4));
-          await Payment.updateMany({ mobile: mobileNumber }, { $inc: { totalGrams: -gramsToReduce } });
-          // Ensure we don't leave negative totalGrams
-          await Payment.updateMany({ mobile: mobileNumber, totalGrams: { $lt: 0 } }, { $set: { totalGrams: 0 } });
-        }
+          // Reduce totalGrams in direct proportion to investAmount/totalAmount
+          // Find all payments for this mobile
+          const payments = await Payment.find({ mobile: mobileNumber });
+          for (const p of payments) {
+            const totalAmount = Number(p.totalAmount || 0);
+            const totalGrams = Number(p.totalGrams || 0);
+            if (totalAmount > 0 && totalGrams > 0) {
+              // Calculate grams to reduce
+              let gramsToReduce = (invest / totalAmount) * totalGrams;
+              gramsToReduce = Math.min(gramsToReduce, totalGrams); // Don't reduce below zero
+              const newTotalGrams = Number((totalGrams - gramsToReduce).toFixed(4));
+              p.totalGrams = newTotalGrams >= 0 ? newTotalGrams : 0;
+              await p.save();
+            }
+          }
       }
     } catch (e) {
       // Log error but don't block approval response
@@ -478,9 +568,6 @@ exports.approveCatalogPayment = async (req, res) => {
   }
 };
 
-
-{
-}
 
 // exports.approveCatalogPayment = async (req, res) => {
 //   try {
