@@ -1279,7 +1279,7 @@ exports.mobilePayment = async (req, res) => {
       gram = 0,
       amount_allocated = 0,
       taxAmount = 0,
-      deliveryCharge = 0
+      
     } = req.body;
 
     if (!mobile) {
@@ -1305,7 +1305,7 @@ exports.mobilePayment = async (req, res) => {
     }
 
     // Calculate totalWithTax (amount + taxAmount + deliveryCharge)
-    const totalWithTax = Number(effectiveAmount) + Number(taxAmount) + Number(deliveryCharge);
+    const totalWithTax = Number(effectiveAmount) + Number(taxAmount) ;
 
     // Always store under the main mobile
     let paymentData = {
@@ -1317,7 +1317,6 @@ exports.mobilePayment = async (req, res) => {
       amount_allocated,
       status: "Payment Confirmation Pending",
       taxAmount,
-      deliveryCharge,
       totalWithTax,
       // timestamp: new Date(),
       paid_by: req.user?.mobile,
@@ -1349,8 +1348,7 @@ exports.mobilePayment = async (req, res) => {
       timestamp: istTimestamp,
       status: payment.status,
       taxAmount: payment.taxAmount,
-      deliveryCharge: payment.deliveryCharge,
-        totalWithTax: totalWithTax,
+      totalWithTax: totalWithTax,
       gram: payment.gram,
       amount_allocated: payment.amount_allocated,
       gram_allocated: payment.gram_allocated,
