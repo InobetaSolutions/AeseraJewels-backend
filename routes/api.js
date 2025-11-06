@@ -12,7 +12,7 @@ const goldpriceController = require("../controllers/goldpriceController");
 const paymentController = require("../controllers/paymentController");
 const auth = require("../middlewares/auth");
 const addressController = require("../controllers/addressController");
-
+const coinController = require("../controllers/coinPayment");
 const multer = require("multer");
 const path = require("path");
 
@@ -123,6 +123,14 @@ router.post("/getDeliveryAddress", addressController.getDeliveryAddress);
 router.put("/updateDeliveryAddress", auth, addressController.updateDeliveryAddress);
 router.post("/deleteDeliveryAddress", auth, addressController.deleteDeliveryAddress);
 // Address APIs ENDS
+
+//coinpayment starts
+router.post('/createCoinPayment', coinController.createCoinPayment);
+router.get('/getAllCoinPayment', coinController.getAllCoinPayment);
+router.get('/getCoinPaymentById/:id', coinController.getCoinPaymentById);
+router.patch('/approveCoinPayment/:id', coinController.approveCoinPayment);
+router.post('/createCoinPayment1', coinController.createCoinPayment1);
+router.get('/getCoinPaymentHistory/:mobileNumber', coinController.getCoinPaymentHistory);
 
 // List all files in uploads directory
 const fs = require("fs");
