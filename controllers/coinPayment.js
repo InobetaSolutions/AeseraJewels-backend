@@ -110,6 +110,155 @@ exports.getAllCoinPayment = async (req, res) => {
   }
 };
 
+// ✅ Get only APPROVED payments (Payment Confirmed)
+exports.getApprovedCoinPayments = async (req, res) => {
+  try {
+    const page = Math.max(parseInt(req.query.page || "1", 10), 1);
+    const limit = Math.max(parseInt(req.query.limit || "20", 10), 1);
+    const skip = (page - 1) * limit;
+
+    const pipeline = [
+      { $match: { status: "Payment Confirmed" } },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: "$mobileNumber",
+          latestPayment: { $first: "$$ROOT" },
+        },
+      },
+      { $replaceRoot: { newRoot: "$latestPayment" } },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+    ];
+
+    const data = await CoinPayment.aggregate(pipeline);
+    const total = (await CoinPayment.find({ status: "Payment Confirmed" }).distinct("mobileNumber")).length;
+
+    return res.status(200).json({
+      status: true,
+      message: "Approved coin payments fetched successfully",
+      data,
+      // pagination: {
+      //   page,
+      //   limit,
+      //   total,
+      //   totalPages: Math.ceil(total / limit) || 1,
+      // },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+
+
+// 🚫 Get only CANCELLED payments
+exports.getCancelledCoinPayments = async (req, res) => {
+  try {
+    const page = Math.max(parseInt(req.query.page || "1", 10), 1);
+    const limit = Math.max(parseInt(req.query.limit || "20", 10), 1);
+    const skip = (page - 1) * limit;
+
+    const pipeline = [
+      { $match: { status: "Cancelled" } },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: "$mobileNumber",
+          latestPayment: { $first: "$$ROOT" },
+        },
+      },
+      { $replaceRoot: { newRoot: "$latestPayment" } },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+    ];
+
+    const data = await CoinPayment.aggregate(pipeline);
+    const total = (await CoinPayment.find({ status: "Cancelled" }).distinct("mobileNumber")).length;
+
+    return res.status(200).json({
+      status: true,
+      message: "Cancelled coin payments fetched successfully",
+      data,
+      // pagination: {
+      //   page,
+      //   limit,
+      //   total,
+      //   totalPages: Math.ceil(total / limit) || 1,
+      // },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.setCoinAllotment = async (req, res) => {
+  try {
+    const { mobileNumber, coinPaymentID } = req.body;
+
+    if (!mobileNumber || !coinPaymentID) {
+      return res.status(400).json({
+        status: false,
+        message: "mobileNumber and coinPaymentID are required",
+      });
+    }
+
+    // Fetch existing coin payment
+    const existingPayment = await CoinPayment.findOne({
+      _id: coinPaymentID,
+      mobileNumber,
+    });
+
+    if (!existingPayment) {
+      return res
+        .status(404)
+        .json({ status: false, message: "Coin payment not found" });
+    }
+
+    // Must be approved before allotment
+    if (existingPayment.status !== "Payment Confirmed") {
+      return res.status(400).json({
+        status: false,
+        message: "Payment must be confirmed before setting allotment",
+      });
+    }
+
+    // --- Update allotment flag ---
+    // You can add an allotmentStatus field to schema if not already there
+    const updatedPayment = await CoinPayment.findOneAndUpdate(
+      { _id: coinPaymentID, mobileNumber },
+      {
+        $set: {
+          allotmentStatus: "Delivered",
+        },
+      },
+      { new: true }
+    );
+
+    res.status(200).json({
+      status: true,
+      message: "Coin allotment marked as Delivered",
+      data: updatedPayment,
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
+
 
 // GET /coin-payments/:id
 exports.getCoinPaymentById = async (req, res) => {
@@ -158,6 +307,7 @@ exports.getCoinPaymentById = async (req, res) => {
 
 // PATCH /coin-payments/:id/approve
 // Optionally accept approvedBy (user id)
+
 exports.approveCoinPayment = async (req, res) => {
   try {
     const { id } = req.params;
@@ -222,6 +372,58 @@ exports.approveCoinPayment = async (req, res) => {
     return res.status(500).json({ status: false, message: 'Internal server error', error: error.message });
   }
 };
+
+exports.cancelCoinPayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cancelledBy, reason } = req.body; // optional ObjectId and reason
+
+    // --- validate ids ---
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: false, message: 'Invalid id' });
+
+    if (cancelledBy && !mongoose.Types.ObjectId.isValid(cancelledBy)) {
+      return res.status(400).json({ status: false, message: 'Invalid cancelledBy' });
+    }
+
+    // --- find payment ---
+    const doc = await CoinPayment.findById(id);
+    if (!doc) return res.status(404).json({ status: false, message: 'Coin payment not found' });
+
+    // --- prevent duplicate cancel or already confirmed ---
+    if (doc.status === 'Cancelled') {
+      return res.status(409).json({ status: false, message: 'Already cancelled' });
+    }
+
+    if (doc.status === 'Payment Confirmed') {
+      return res.status(409).json({
+        status: false,
+        message: 'Cannot cancel a payment that is already confirmed',
+      });
+    }
+
+    // --- update cancellation fields ---
+    doc.status = 'Cancelled';
+    doc.cancelledAt = new Date();
+    if (cancelledBy) doc.cancelledBy = cancelledBy;
+    if (reason) doc.cancelReason = reason;
+
+    await doc.save();
+
+    return res.status(200).json({
+      status: true,
+      message: 'Coin payment cancelled successfully',
+      data: doc,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: false,
+      message: 'Internal server error',
+      error: error.message,
+    });
+  }
+};
+
 
 // Helpers
 function normalizeBody(body) {

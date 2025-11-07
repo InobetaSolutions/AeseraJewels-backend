@@ -127,8 +127,13 @@ router.post("/deleteDeliveryAddress", auth, addressController.deleteDeliveryAddr
 //coinpayment starts
 router.post('/createCoinPayment', coinController.createCoinPayment);
 router.get('/getAllCoinPayment', coinController.getAllCoinPayment);
+// router.get('/getPendingCoinPayments', coinController.getPendingCoinPayments);
+router.get('/getApprovedCoinPayments', coinController.getApprovedCoinPayments);
+router.get('/getCancelledCoinPayments', coinController.getCancelledCoinPayments);
+router.get('/setCoinAllotment', coinController.setCoinAllotment);
 router.get('/getCoinPaymentById/:id', coinController.getCoinPaymentById);
 router.patch('/approveCoinPayment/:id', coinController.approveCoinPayment);
+router.patch('/cancelCoinPayment/:id', coinController.cancelCoinPayment);
 router.post('/createCoinPayment1', coinController.createCoinPayment1);
 router.get('/getCoinPaymentHistory/:mobileNumber', coinController.getCoinPaymentHistory);
 
