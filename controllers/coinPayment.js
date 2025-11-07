@@ -271,160 +271,218 @@ function numberOrNull(v) {
 
 
 // POST /coin-payments
+// exports.createCoinPayment1 = async (req, res) => {
+//   try {
+//     // --- helpers ---
+//     const numberOrNull = (v) => {
+//       if (v == null) return null;
+//       const n = Number(v);
+//       return Number.isNaN(n) ? null : n;
+//     };
+
+//     // Accepts payloads with keys like "Coin grams" and "Quantty" and maps to schema fields.
+//     // Supports both: items: [...] OR a single item-like object in body.items
+//     const normalizeBody = (body) => {
+//       const normalizeItem = (raw) => ({
+//         coinGrams: numberOrNull(raw?.coinGrams ?? raw?.['Coin grams']),
+//         quantity: numberOrNull(raw?.quantity ?? raw?.Quantty),
+//         amount: numberOrNull(raw?.amount),
+//       });
+
+//       let items = body.items;
+//       if (Array.isArray(items)) {
+//         items = items.map(normalizeItem);
+//       } else if (items && typeof items === 'object') {
+//         items = [normalizeItem(items)];
+//       } else {
+//         // If client sent loose objects, require proper `items` array in request
+//         items = undefined;
+//       }
+
+//       return {
+//         mobileNumber: body.mobileNumber,
+//         items,
+//         totalAmount: numberOrNull(body.totalAmount ?? body.TotalAmount),
+//         taxAmount: numberOrNull(body.taxAmount),
+//         deliveryCharge: numberOrNull(body.deliveryCharge ?? body.deliveryCharges),
+//         amountPayable: numberOrNull(body.amountPayable ?? body.AmountPayable),
+//         investAmount: numberOrNull(body.investAmount ?? body.InvestAmount),
+//         address: body.address,
+//         city: body.city,
+//         postCode: body.postCode,
+//       };
+//     };
+
+//     // --- normalize incoming body ---
+//     const {
+//       mobileNumber,
+//       items,
+//       totalAmount,
+//       taxAmount,
+//       deliveryCharge,
+//       amountPayable,
+//       investAmount,
+//       address,
+//       city,
+//       postCode,
+//     } = normalizeBody(req.body);
+
+//     // --- presence checks ---
+//     if (!mobileNumber)
+//       return res.status(400).json({ status: false, message: 'mobileNumber is required' });
+
+//     if (!Array.isArray(items) || items.length === 0)
+//       return res.status(400).json({ status: false, message: 'items must be a non-empty array' });
+
+//     if (totalAmount == null || taxAmount == null || deliveryCharge == null || amountPayable == null)
+//       return res.status(400).json({
+//         status: false,
+//         message: 'totalAmount, taxAmount, deliveryCharge, amountPayable are required',
+//       });
+
+//     if (investAmount == null || isNaN(Number(investAmount)) || Number(investAmount) < 0)
+//       return res.status(400).json({
+//         status: false,
+//         message: 'investAmount is required and must be a non-negative number',
+//       });
+
+//     if (!address || !city || !postCode)
+//       return res.status(400).json({ status: false, message: 'address, city, postCode are required' });
+
+//     // --- validate items ---
+//     for (let i = 0; i < items.length; i++) {
+//       const it = items[i];
+
+//       if (it.coinGrams == null || it.quantity == null || it.amount == null) {
+//         return res.status(400).json({
+//           status: false,
+//           message: `items[${i}] must include coinGrams, quantity, amount`,
+//         });
+//       }
+
+//       if (Number(it.coinGrams) < 0)
+//         return res.status(400).json({
+//           status: false,
+//           message: `items[${i}].coinGrams must be >= 0`,
+//         });
+
+//       if (!Number.isInteger(Number(it.quantity)) || Number(it.quantity) <= 0)
+//         return res.status(400).json({
+//           status: false,
+//           message: `items[${i}].quantity must be a positive integer`,
+//         });
+
+//       if (Number(it.amount) < 0)
+//         return res.status(400).json({
+//           status: false,
+//           message: `items[${i}].amount must be >= 0`,
+//         });
+//     }
+
+//     // --- integrity checks ---
+//     const itemsSubtotal = items.reduce((sum, it) => sum + Number(it.amount), 0);
+//     const computedPayable = itemsSubtotal + Number(taxAmount) + Number(deliveryCharge);
+
+//     if (Number(totalAmount) !== itemsSubtotal) {
+//       return res.status(400).json({
+//         status: false,
+//         message: 'totalAmount must equal sum of items.amount',
+//       });
+//     }
+
+//     if (Number(amountPayable) !== computedPayable) {
+//       return res.status(400).json({
+//         status: false,
+//         message: 'amountPayable must equal totalAmount + taxAmount + deliveryCharge',
+//       });
+//     }
+
+//     // --- create document (status defaults to "Approval Pending") ---
+//     const doc = await CoinPayment.create({
+//       mobileNumber,
+//       items: items.map((it) => ({
+//         coinGrams: Number(it.coinGrams),
+//         quantity: Number(it.quantity),
+//         amount: Number(it.amount),
+//       })),
+//       totalAmount: Number(totalAmount),
+//       taxAmount: Number(taxAmount),
+//       deliveryCharge: Number(deliveryCharge),
+//       amountPayable: Number(amountPayable),
+//       investAmount: Number(investAmount),
+//       address,
+//       city,
+//       postCode,
+//       status: 'Approval Pending',
+//     });
+
+//     return res
+//       .status(201)
+//       .json({ status: true, message: 'Coin payment created (Approval Pending)', data: doc });
+//   } catch (error) {
+//     return res
+//       .status(500)
+//       .json({ status: false, message: 'Internal server error', error: error.message });
+//   }
+// };
+
+
 exports.createCoinPayment1 = async (req, res) => {
   try {
-    // --- helpers ---
-    const numberOrNull = (v) => {
-      if (v == null) return null;
-      const n = Number(v);
-      return Number.isNaN(n) ? null : n;
+    // helper to coerce numbers if provided as strings
+    const num = (v) => (v === undefined || v === null ? v : Number(v));
+
+    // allow items as array or single object
+    let items = req.body.items;
+    if (items && !Array.isArray(items)) items = [items];
+
+    // do not compute any totals; just coerce basic number fields and save as-is
+    const payload = {
+      mobileNumber: req.body.mobileNumber,
+      items: Array.isArray(items)
+        ? items.map((it) => ({
+            coinGrams: num(it.coinGrams ?? it['Coin grams']),
+            quantity: num(it.quantity ?? it.Quantty),
+            amount: num(it.amount),
+          }))
+        : undefined,
+
+      // store what client sent (no recomputation)
+      totalAmount: num(req.body.totalAmount ?? req.body.TotalAmount),
+      taxAmount: num(req.body.taxAmount),
+      deliveryCharge: num(req.body.deliveryCharge ?? req.body.deliveryCharges),
+      amountPayable: num(req.body.amountPayable ?? req.body.AmountPayable),
+      investAmount: num(req.body.investAmount ?? req.body.InvestAmount),
+
+      address: req.body.address,
+      city: req.body.city,
+      postCode: req.body.postCode,
+
+      // default status if not provided
+      status: req.body.status || 'Approval Pending',
+      approvedAt: req.body.approvedAt,
+      approvedBy: req.body.approvedBy
     };
 
-    // Accepts payloads with keys like "Coin grams" and "Quantty" and maps to schema fields.
-    // Supports both: items: [...] OR a single item-like object in body.items
-    const normalizeBody = (body) => {
-      const normalizeItem = (raw) => ({
-        coinGrams: numberOrNull(raw?.coinGrams ?? raw?.['Coin grams']),
-        quantity: numberOrNull(raw?.quantity ?? raw?.Quantty),
-        amount: numberOrNull(raw?.amount),
-      });
+    const doc = await CoinPayment.create(payload);
 
-      let items = body.items;
-      if (Array.isArray(items)) {
-        items = items.map(normalizeItem);
-      } else if (items && typeof items === 'object') {
-        items = [normalizeItem(items)];
-      } else {
-        // If client sent loose objects, require proper `items` array in request
-        items = undefined;
-      }
-
-      return {
-        mobileNumber: body.mobileNumber,
-        items,
-        totalAmount: numberOrNull(body.totalAmount ?? body.TotalAmount),
-        taxAmount: numberOrNull(body.taxAmount),
-        deliveryCharge: numberOrNull(body.deliveryCharge ?? body.deliveryCharges),
-        amountPayable: numberOrNull(body.amountPayable ?? body.AmountPayable),
-        investAmount: numberOrNull(body.investAmount ?? body.InvestAmount),
-        address: body.address,
-        city: body.city,
-        postCode: body.postCode,
-      };
-    };
-
-    // --- normalize incoming body ---
-    const {
-      mobileNumber,
-      items,
-      totalAmount,
-      taxAmount,
-      deliveryCharge,
-      amountPayable,
-      investAmount,
-      address,
-      city,
-      postCode,
-    } = normalizeBody(req.body);
-
-    // --- presence checks ---
-    if (!mobileNumber)
-      return res.status(400).json({ status: false, message: 'mobileNumber is required' });
-
-    if (!Array.isArray(items) || items.length === 0)
-      return res.status(400).json({ status: false, message: 'items must be a non-empty array' });
-
-    if (totalAmount == null || taxAmount == null || deliveryCharge == null || amountPayable == null)
-      return res.status(400).json({
-        status: false,
-        message: 'totalAmount, taxAmount, deliveryCharge, amountPayable are required',
-      });
-
-    if (investAmount == null || isNaN(Number(investAmount)) || Number(investAmount) < 0)
-      return res.status(400).json({
-        status: false,
-        message: 'investAmount is required and must be a non-negative number',
-      });
-
-    if (!address || !city || !postCode)
-      return res.status(400).json({ status: false, message: 'address, city, postCode are required' });
-
-    // --- validate items ---
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-
-      if (it.coinGrams == null || it.quantity == null || it.amount == null) {
-        return res.status(400).json({
-          status: false,
-          message: `items[${i}] must include coinGrams, quantity, amount`,
-        });
-      }
-
-      if (Number(it.coinGrams) < 0)
-        return res.status(400).json({
-          status: false,
-          message: `items[${i}].coinGrams must be >= 0`,
-        });
-
-      if (!Number.isInteger(Number(it.quantity)) || Number(it.quantity) <= 0)
-        return res.status(400).json({
-          status: false,
-          message: `items[${i}].quantity must be a positive integer`,
-        });
-
-      if (Number(it.amount) < 0)
-        return res.status(400).json({
-          status: false,
-          message: `items[${i}].amount must be >= 0`,
-        });
-    }
-
-    // --- integrity checks ---
-    const itemsSubtotal = items.reduce((sum, it) => sum + Number(it.amount), 0);
-    const computedPayable = itemsSubtotal + Number(taxAmount) + Number(deliveryCharge);
-
-    if (Number(totalAmount) !== itemsSubtotal) {
-      return res.status(400).json({
-        status: false,
-        message: 'totalAmount must equal sum of items.amount',
-      });
-    }
-
-    if (Number(amountPayable) !== computedPayable) {
-      return res.status(400).json({
-        status: false,
-        message: 'amountPayable must equal totalAmount + taxAmount + deliveryCharge',
-      });
-    }
-
-    // --- create document (status defaults to "Approval Pending") ---
-    const doc = await CoinPayment.create({
-      mobileNumber,
-      items: items.map((it) => ({
-        coinGrams: Number(it.coinGrams),
-        quantity: Number(it.quantity),
-        amount: Number(it.amount),
-      })),
-      totalAmount: Number(totalAmount),
-      taxAmount: Number(taxAmount),
-      deliveryCharge: Number(deliveryCharge),
-      amountPayable: Number(amountPayable),
-      investAmount: Number(investAmount),
-      address,
-      city,
-      postCode,
-      status: 'Approval Pending',
+    return res.status(201).json({
+      status: true,
+      message: 'Coin payment stored',
+      data: doc
     });
-
-    return res
-      .status(201)
-      .json({ status: true, message: 'Coin payment created (Approval Pending)', data: doc });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ status: false, message: 'Internal server error', error: error.message });
+    // If schema required fields are missing, Mongoose throws a ValidationError
+    const isValidation = error?.name === 'ValidationError';
+    return res.status(isValidation ? 400 : 500).json({
+      status: false,
+      message: isValidation ? 'Validation error' : 'Internal server error',
+      error: error.message
+    });
   }
 };
+
+
 
 
 
