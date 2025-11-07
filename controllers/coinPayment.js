@@ -93,13 +93,13 @@ exports.getAllCoinPayment = async (req, res) => {
 
     return res.status(200).json({
       status: true,
-      data,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit) || 1
-      }
+      data
+      // pagination: {
+      //   page,
+      //   limit,
+      //   total,
+      //   totalPages: Math.ceil(total / limit) || 1
+      // }
     });
   } catch (error) {
     return res.status(500).json({
@@ -128,12 +128,43 @@ exports.getCoinPaymentById = async (req, res) => {
 
 // PATCH /coin-payments/:id/approve
 // Optionally accept approvedBy (user id)
+// exports.approveCoinPayment = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { approvedBy } = req.body; // optional ObjectId
+
+//     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ status: false, message: 'Invalid id' });
+//     if (approvedBy && !mongoose.Types.ObjectId.isValid(approvedBy)) {
+//       return res.status(400).json({ status: false, message: 'Invalid approvedBy' });
+//     }
+
+//     const doc = await CoinPayment.findById(id);
+//     if (!doc) return res.status(404).json({ status: false, message: 'Coin payment not found' });
+
+//     if (doc.status === 'Payment Confirmed') {
+//       return res.status(409).json({ status: false, message: 'Already confirmed' });
+//     }
+
+//     doc.status = 'Payment Confirmed';
+//     doc.approvedAt = new Date();
+//     if (approvedBy) doc.approvedBy = approvedBy;
+//     await doc.save();
+
+//     return res.status(200).json({ status: true, message: 'Payment Confirmed', data: doc });
+//   } catch (error) {
+//     return res.status(500).json({ status: false, message: 'Internal server error', error: error.message });
+//   }
+// };
+
+// PATCH /coin-payments/:id/approve
+// Optionally accept approvedBy (user id)
 exports.approveCoinPayment = async (req, res) => {
   try {
     const { id } = req.params;
     const { approvedBy } = req.body; // optional ObjectId
 
-    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ status: false, message: 'Invalid id' });
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: false, message: 'Invalid id' });
     if (approvedBy && !mongoose.Types.ObjectId.isValid(approvedBy)) {
       return res.status(400).json({ status: false, message: 'Invalid approvedBy' });
     }
@@ -149,6 +180,42 @@ exports.approveCoinPayment = async (req, res) => {
     doc.approvedAt = new Date();
     if (approvedBy) doc.approvedBy = approvedBy;
     await doc.save();
+
+    // --- Proportional reduction in Payment model ---
+    try {
+      const Payment = require("../models/Payment");
+      const invest = Number(doc.investAmount || 0);
+
+      if (invest > 0) {
+        // Find the latest confirmed payment for this mobileNumber
+        const latestPayment = await Payment.findOne({
+          mobile: doc.mobileNumber,
+          status: "Payment Confirmed"
+        }).sort({ createdAt: -1 });
+
+        if (latestPayment) {
+          // Reduce totalAmount
+          const oldTotalAmount = Number(latestPayment.totalAmount || 0);
+          const oldTotalGrams = Number(latestPayment.totalGrams || 0);
+          const newTotalAmount = Math.max(0, oldTotalAmount - invest);
+
+          // Proportional reduction for grams
+          let newTotalGrams = oldTotalGrams;
+          if (oldTotalAmount > 0) {
+            newTotalGrams = Number((oldTotalGrams * (newTotalAmount / oldTotalAmount)).toFixed(4));
+          }
+          if (newTotalAmount === 0) {
+            newTotalGrams = 0;
+          }
+
+          latestPayment.totalAmount = newTotalAmount;
+          latestPayment.totalGrams = newTotalGrams;
+          await latestPayment.save();
+        }
+      }
+    } catch (e) {
+      console.error("Failed to adjust Payment totals after coin approval:", e.message);
+    }
 
     return res.status(200).json({ status: true, message: 'Payment Confirmed', data: doc });
   } catch (error) {
@@ -423,13 +490,13 @@ exports.getCoinPaymentHistory = async (req, res) => {
     return res.status(200).json({
       status: true,
       data: items,
-      summary,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit) || 1
-      }
+      summary
+      // pagination: {
+      //   page,
+      //   limit,
+      //   total,
+      //   totalPages: Math.ceil(total / limit) || 1
+      // }
     });
   } catch (error) {
     return res.status(500).json({ status: false, message: 'Internal server error', error: error.message });
