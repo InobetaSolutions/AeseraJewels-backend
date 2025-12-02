@@ -621,6 +621,83 @@ exports.getPaymentHistoryAdmin = async (req, res) => {
     res.status(500).json({ error: "Server error." });
   }
 };
+exports.getUserPaymentAndAllotment = async (req, res) => {
+  try {
+    const { mobile } = req.body;
+    if (!mobile) {
+      return res.status(400).json({ error: "Mobile is required." });
+    }
+
+    const Payment = require("../models/Payment");
+    const Allotment = require("../models/Allotment");
+
+    // Fetch all payments for this mobile (latest first)
+    const payments = await Payment.find({ mobile }).sort({ createdAt: -1 });
+
+    // Find latest confirmed payment (for total summary)
+    const latestConfirmed = payments.find((p) => p.status === "Payment Confirmed");
+
+    const latestTotalAmount = latestConfirmed ? Number(latestConfirmed.totalAmount || 0) : 0;
+    const latestTotalGrams = latestConfirmed ? Number(latestConfirmed.totalGrams || 0) : 0;
+
+    // Format payments with IST time and ensure numeric fields
+    const formattedPayments = payments.map((p) => ({
+      ...p._doc,
+      timestamp: p.updatedAt
+        ? new Date(p.updatedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
+        : null,
+      totalAmount: Number(p.totalAmount || 0),
+      totalGrams: Number(p.totalGrams || 0),
+    }));
+
+    // Fetch allotments (latest first)
+    const allotments = await Allotment.find({ mobile }).sort({ timestamp: -1 });
+
+    // Calculate total payment amount & grams for allotment logic
+    const totalAmountRaw = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const totalGramsRaw = payments.reduce(
+      (sum, p) => sum + (p.gram || 0) + (p.gram_allocated || 0),
+      0
+    );
+
+    const lastStatus =
+      payments.length > 0
+        ? payments[payments.length - 1].status
+        : "Payment Confirmation Pending";
+
+    // Compute amountReduced for each allotment
+    const formattedAllotments = allotments.map((a) => {
+      let amountReduced = 0;
+      if (totalGramsRaw > 0) {
+        amountReduced = (totalAmountRaw * a.gram) / totalGramsRaw;
+      }
+      const istTimestamp = a.timestamp
+        ? new Date(a.timestamp).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
+        : null;
+      return {
+        ...a._doc,
+        amountReduced: Number(amountReduced.toFixed(2)),
+        status: lastStatus,
+        timestamp: istTimestamp,
+      };
+    });
+
+    // Final combined response
+    res.json({
+      mobile,
+      summary: {
+        totalAmount: latestTotalAmount,
+        totalGrams: latestTotalGrams,
+      },
+      payments: formattedPayments,
+      allotments: formattedAllotments,
+    });
+  } catch (err) {
+    console.error("Error in getUserPaymentAndAllotmentAdmin:", err);
+    res.status(500).json({ error: "Server error." });
+  }
+};
+
 
 // Approve payment by ObjectId
 
