@@ -584,6 +584,44 @@ exports.getPaymentHistory = async (req, res) => {
   }
 };
 
+exports.getPaymentHistoryAdmin = async (req, res) => {
+  try {
+    const { mobile } = req.body;
+    if (!mobile) {
+      return res.status(400).json({ error: "Mobile is required." });
+    }
+
+    const Payment = require("../models/Payment");
+
+    // Get all payments for this mobile
+    const payments = await Payment.find({ mobile }).sort({ createdAt: -1 });
+
+    // Find the latest confirmed payment for totals
+    const latestConfirmed = payments.find(p => p.status === "Payment Confirmed");
+
+    const latestTotalAmount = latestConfirmed ? Number(latestConfirmed.totalAmount || 0) : 0;
+    const latestTotalGrams = latestConfirmed ? Number(latestConfirmed.totalGrams || 0) : 0;
+
+    // Format payments with IST timestamp
+    const formatted = payments.map((p) => ({
+      ...p._doc,
+      timestamp: p.updatedAt
+        ? new Date(p.updatedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
+        : null,
+      totalAmount: Number(p.totalAmount || 0),
+      totalGrams: Number(p.totalGrams || 0),
+    }));
+
+    res.json({
+      totalAmount: latestTotalAmount,
+      totalGrams: latestTotalGrams,
+      payments: formatted,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Server error." });
+  }
+};
+
 // Approve payment by ObjectId
 
 // exports.approvePayment = async (req, res) => {

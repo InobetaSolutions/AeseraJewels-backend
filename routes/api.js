@@ -49,6 +49,7 @@ router.get("/get-products", productController.getProducts);
 // App Payment STARTS
 // router.post('/create-payment', auth, paymentController.createPayment);
 router.post("/getpaymenthistory", auth, paymentController.getPaymentHistory);
+router.post("/getPaymentHistoryAdmin",paymentController.getPaymentHistoryAdmin);
 router.post("/convert-gram-to-amount", paymentController.convertGramToAmount);
 router.post("/newPayment", auth, paymentController.mobilePayment);
 router.post("/cancelPayment",  paymentController.cancelPayment);
