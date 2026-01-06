@@ -15,6 +15,7 @@ const addressController = require("../controllers/addressController");
 const coinController = require("../controllers/coinPayment");
 const multer = require("multer");
 const path = require("path");
+const sellController = require("../controllers/sellController");
 
 // Multer config for image upload
 const storage = multer.diskStorage({
@@ -150,4 +151,10 @@ router.get("/uploads", (req, res) => {
   });
 });
 
+router.post("/createSellPayment", sellController.createSellPayment);
+router.post("/approveSellPayment", sellController.approveSellPayment);
+router.get("/getAllSellPaymentHistoryForAdmin", sellController.getAllSellPaymentHistoryForAdmin);
+router.get("/getAllSellPaymentHistoryForUser", auth, sellController.getAllSellPaymentHistoryForUser);
+router.get("/getApprovedSellPayment", sellController.getApprovedSellPayment);
+router.post("/cancelSellPayment", sellController.cancelSellPayment);
 module.exports = router;

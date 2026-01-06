@@ -499,7 +499,6 @@ exports.getFullPayment = async (req, res) => {
 
 // {"working code ends"}
 
-
 // exports.getPaymentHistory = async (req, res) => {
 //   try {
 //     const { mobile } = req.body;
@@ -554,6 +553,7 @@ exports.getPaymentHistory = async (req, res) => {
     }
 
     const Payment = require("../models/Payment");
+    const SellPayment = require("../models/sellPayment");
 
     // Get all payments for this mobile
     const payments = await Payment.find({ mobile }).sort({ createdAt: -1 });
@@ -561,23 +561,33 @@ exports.getPaymentHistory = async (req, res) => {
     // Find the latest confirmed payment for totals
     const latestConfirmed = payments.find(p => p.status === "Payment Confirmed");
 
-    const latestTotalAmount = latestConfirmed ? Number(latestConfirmed.totalAmount || 0) : 0;
-    const latestTotalGrams = latestConfirmed ? Number(latestConfirmed.totalGrams || 0) : 0;
+    const latestTotalAmount = latestConfirmed ? Number(latestConfirmed.totalAmount || 0).toFixed(2) : "0.00";
+    const latestTotalGrams = latestConfirmed ? Number(latestConfirmed.totalGrams || 0).toFixed(2) : "0.00";
 
     // Format payments with IST timestamp
-    const formatted = payments.map((p) => ({
+    const formattedPayments = payments.map((p) => ({
       ...p._doc,
       timestamp: p.updatedAt
         ? new Date(p.updatedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
         : null,
-      totalAmount: Number(p.totalAmount || 0),
-      totalGrams: Number(p.totalGrams || 0),
+      totalAmount: Number(p.totalAmount || 0).toFixed(2),
+      totalGrams: Number(p.totalGrams || 0).toFixed(2),
+    }));
+
+    // Fetch sell payment history for this mobile
+    const sellPayments = await SellPayment.find({ mobileNumber: mobile }).sort({ createdAt: -1 });
+    const formattedSellPayments = sellPayments.map((sp) => ({
+      ...sp._doc,
+      timestamp: sp.updatedAt
+        ? new Date(sp.updatedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
+        : null,
     }));
 
     res.json({
       totalAmount: latestTotalAmount,
       totalGrams: latestTotalGrams,
-      payments: formatted,
+      payments: formattedPayments,
+      sellPaymentHistory: formattedSellPayments,
     });
   } catch (err) {
     res.status(500).json({ error: "Server error." });
