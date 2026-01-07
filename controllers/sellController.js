@@ -2,6 +2,7 @@ const SellPayment = require("../models/sellPayment");
 const User = require("../models/User");
 const Payment = require("../models/Payment");
 const GoldPrice = require("../models/GoldPrice");
+const OtherCharges = require("../models/OtherCharges");
 
 const createSellPayment = async (req, res) => {
     try {
@@ -263,6 +264,90 @@ const getApprovedSellPayment = async (req, res) => {
     }
 };
 
+// Create Other Charges
+const createOtherCharges = async (req, res) => {
+    try {
+        const { value } = req.body;
+
+        if (!value || typeof value !== "number" || value <= 0) {
+            return res.status(400).json({ message: "Invalid value. It must be a positive number." });
+        }
+
+        // Check if otherCharges already exists
+        const existingCharge = await OtherCharges.findOne();
+        if (existingCharge) {
+            return res.status(400).json({ message: "Other charges already exist. Please update the existing value." });
+        }
+
+        const otherCharges = new OtherCharges({ value });
+        await otherCharges.save();
+
+        res.status(201).json({ message: "Other charges created successfully.", otherCharges });
+    } catch (error) {
+        console.error("Error in createOtherCharges:", error);
+        res.status(500).json({ message: "An error occurred while creating other charges." });
+    }
+};
+
+// Read Other Charges
+const getOtherCharges = async (req, res) => {
+    try {
+        const otherCharges = await OtherCharges.findOne();
+
+        if (!otherCharges) {
+            return res.status(404).json({ message: "Other charges not found." });
+        }
+
+        res.status(200).json({ message: "Other charges fetched successfully.", otherCharges });
+    } catch (error) {
+        console.error("Error in getOtherCharges:", error);
+        res.status(500).json({ message: "An error occurred while fetching other charges." });
+    }
+};
+
+// Update Other Charges
+const updateOtherCharges = async (req, res) => {
+    try {
+        const { value } = req.body;
+
+        if (!value || typeof value !== "number" || value <= 0) {
+            return res.status(400).json({ message: "Invalid value. It must be a positive number." });
+        }
+
+        const otherCharges = await OtherCharges.findOne();
+
+        if (!otherCharges) {
+            return res.status(404).json({ message: "Other charges not found." });
+        }
+
+        otherCharges.value = value;
+        await otherCharges.save();
+
+        res.status(200).json({ message: "Other charges updated successfully.", otherCharges });
+    } catch (error) {
+        console.error("Error in updateOtherCharges:", error);
+        res.status(500).json({ message: "An error occurred while updating other charges." });
+    }
+};
+
+// Delete Other Charges
+const deleteOtherCharges = async (req, res) => {
+    try {
+        const otherCharges = await OtherCharges.findOne();
+
+        if (!otherCharges) {
+            return res.status(404).json({ message: "Other charges not found." });
+        }
+
+        await otherCharges.deleteOne();
+
+        res.status(200).json({ message: "Other charges deleted successfully." });
+    } catch (error) {
+        console.error("Error in deleteOtherCharges:", error);
+        res.status(500).json({ message: "An error occurred while deleting other charges." });
+    }
+};
+
 module.exports = {
     createSellPayment,
     approveSellPayment,
@@ -270,4 +355,8 @@ module.exports = {
     getAllSellPaymentHistoryForAdmin,
     getAllSellPaymentHistoryForUser,
     getApprovedSellPayment,
+    createOtherCharges,
+    getOtherCharges,
+    updateOtherCharges,
+    deleteOtherCharges,
 };
