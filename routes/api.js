@@ -16,6 +16,7 @@ const coinController = require("../controllers/coinPayment");
 const multer = require("multer");
 const path = require("path");
 const sellController = require("../controllers/sellController");
+const paymentGatewayChargesController = require("../controllers/paymentGatewayChargesController");
 
 // Multer config for image upload
 const storage = multer.diskStorage({
@@ -157,4 +158,17 @@ router.get("/getAllSellPaymentHistoryForAdmin", sellController.getAllSellPayment
 router.get("/getAllSellPaymentHistoryForUser", auth, sellController.getAllSellPaymentHistoryForUser);
 router.get("/getApprovedSellPayment", sellController.getApprovedSellPayment);
 router.post("/cancelSellPayment", sellController.cancelSellPayment);
+
+// Other Charges Routes
+router.post("/createOtherCharges", sellController.createOtherCharges);
+router.get("/getOtherCharges", sellController.getOtherCharges);
+router.put("/UpdateOtherCharges", sellController.updateOtherCharges);
+router.delete("/deleteOtherCharges", sellController.deleteOtherCharges);
+
+// Payment Gateway Charges Routes
+router.post("/createPaymentGatewayCharges", paymentGatewayChargesController.createPaymentGatewayCharges);
+router.get("/getPaymentGatewayCharges", paymentGatewayChargesController.getPaymentGatewayCharges);
+router.put("/updatePaymentGatewayCharges", paymentGatewayChargesController.updatePaymentGatewayCharges);
+router.delete("/deletePaymentGatewayCharges", paymentGatewayChargesController.deletePaymentGatewayCharges);
+
 module.exports = router;
