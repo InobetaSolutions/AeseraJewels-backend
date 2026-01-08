@@ -999,6 +999,7 @@ exports.approvePayment = async (req, res) => {
       payment: {
         ...payment._doc,
         gold: payment.gold || 0,
+        // Return stored totals (if present) formatted
         totalAmount:
           payment.totalAmount !== undefined
             ? Number(formatTo2Decimals(payment.totalAmount))
@@ -1567,6 +1568,52 @@ exports.mobilePayment = async (req, res) => {
   } catch (err) {
     console.error("Error in mobilePayment:", err);
     res.status(500).json({ error: "Server error." });
+  }
+};
+
+// Generate Payment History Report for a specific user
+const PDFDocument = require("pdfkit");
+const fs = require("fs");
+const path = require("path");
+
+exports.generatePaymentHistoryReport = async (req, res) => {
+  try {
+    const userId = req.user.id; // Assuming user ID is available in the auth middleware
+    const Payment = require("../models/Payment");
+
+    const payments = await Payment.find({ userId }).sort({ createdAt: -1 });
+
+    const report = payments.map((payment) => ({
+      id: payment._id,
+      amount: payment.amount,
+      status: payment.status,
+      date: payment.createdAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+    }));
+
+    // Generate PDF
+    const pdfPath = path.join(__dirname, "../uploads/payment_history.pdf");
+    const pdfDoc = new PDFDocument();
+    pdfDoc.pipe(fs.createWriteStream(pdfPath));
+    pdfDoc.fontSize(16).text("Payment History Report", { align: "center" });
+    pdfDoc.moveDown();
+    report.forEach((payment, index) => {
+      pdfDoc
+        .fontSize(12)
+        .text(
+          `${index + 1}. ID: ${payment.id}, Amount: ${payment.amount}, Status: ${payment.status}, Date: ${payment.date}`
+        );
+    });
+    pdfDoc.end();
+
+    res.json({
+      success: true,
+      message: "Payment history report generated successfully.",
+      data: {
+        pdf: `/uploads/payment_history.pdf`,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to generate payment history report." });
   }
 };
 
