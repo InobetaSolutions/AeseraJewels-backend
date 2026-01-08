@@ -164,8 +164,11 @@ router.post("/cancelSellPayment", sellController.cancelSellPayment);
 
 // Report Generation APIs
 router.get("/generateSellPaymentHistoryReport", auth, sellController.generateSellPaymentHistoryReport);
-router.get("/generateTransactionReport", sellController.generateTransactionReport);
-
+// router.get("/generateTransactionReport", sellController.generateTransactionReport);
+router.post(
+  "/generate-transaction-report",
+  sellController.generateTransactionReport
+);
 // Other Charges Routes
 router.post("/createOtherCharges", sellController.createOtherCharges);
 router.get("/getOtherCharges", sellController.getOtherCharges);
