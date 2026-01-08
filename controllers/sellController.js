@@ -7,6 +7,20 @@ const ExcelJS = require("exceljs");
 const fs = require("fs");
 const path = require("path");
 
+
+
+
+const sanitizeFileName = (name) => {
+  if (!name) return "Customer";
+
+  return name
+    .toString()
+    .trim()
+    .replace(/[^a-zA-Z0-9 ]/g, "") // remove special chars
+    .replace(/\s+/g, "_");         // spaces → underscore
+};
+
+
 const createSellPayment = async (req, res) => {
     try {
         const { mobileNumber, amount, gram, paymentGatewayCharges, taxAmount, deliveryCharges, paymentStatus } = req.body;
@@ -379,70 +393,74 @@ const generateSellPaymentHistoryReport = async (req, res) => {
 
 
 
-const CoinPayment = require("../models/coinPayment");
-/**
- * Get gold rate at transaction time
- */
-const getGoldRateAtTime = (goldRates, createdAt) => {
-  const txnTime = new Date(createdAt).getTime();
-  for (const g of goldRates) {
-    if (g.timestamp * 1000 <= txnTime) {
-      return Number(g.price_gram_24k);
-    }
-  }
-  return 0;
-};
+// const CoinPayment = require("../models/coinPayment");
+// /**
+//  * Get gold rate at transaction time
+//  */
+// const getGoldRateAtTime = (goldRates, createdAt) => {
+//   const txnTime = new Date(createdAt).getTime();
+//   for (const g of goldRates) {
+//     if (g.timestamp * 1000 <= txnTime) {
+//       return Number(g.price_gram_24k);
+//     }
+//   }
+//   return 0;
+// };
+
+
+
+
 // const generateTransactionReport = async (req, res) => {
 //   try {
-//     const { mobile } = req.query;
+//     const { mobile, start_date, end_date } = req.body;
+
 //     if (!mobile) {
 //       return res.status(400).json({ message: "Mobile number required" });
 //     }
 
-//     // 1️⃣ Fetch all data
+//     // Date filter
+//     const dateFilter = {};
+//     if (start_date) dateFilter.$gte = new Date(start_date);
+//     if (end_date) {
+//       const end = new Date(end_date);
+//       end.setHours(23, 59, 59, 999);
+//       dateFilter.$lte = end;
+//     }
+
+//     const createdAtFilter =
+//       Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {};
+
+//     // Fetch user
+//     const user = await User.findOne({ mobile }).lean();
+
+//     // Fetch data
 //     const [payments, coinPayments, sellPayments, goldRates] =
 //       await Promise.all([
-//         Payment.find({ mobile }).lean(),
-//         CoinPayment.find({ mobileNumber: mobile }).lean(),
-//         SellPayment.find({ mobileNumber: mobile }).lean(),
-//         GoldPrice.find().sort({ timestamp: -1 }).lean()
+//         Payment.find({ mobile, ...createdAtFilter }).lean(),
+//         CoinPayment.find({ mobileNumber: mobile, ...createdAtFilter }).lean(),
+//         SellPayment.find({ mobileNumber: mobile, ...createdAtFilter }).lean(),
+//         GoldPrice.find().sort({ timestamp: -1 }).lean(),
 //       ]);
 
-//     // 2️⃣ Normalize all transactions into one timeline
+//     // Timeline
 //     const timeline = [];
 
-//     payments.forEach(p => {
-//       timeline.push({
-//         type: "BUY",
-//         createdAt: p.createdAt,
-//         data: p
-//       });
-//     });
+//     payments.forEach(p =>
+//       timeline.push({ type: "BUY", createdAt: p.createdAt, data: p })
+//     );
+//     coinPayments.forEach(c =>
+//       timeline.push({ type: "COIN", createdAt: c.createdAt, data: c })
+//     );
+//     sellPayments.forEach(s =>
+//       timeline.push({ type: "SELL", createdAt: s.createdAt, data: s })
+//     );
 
-//     coinPayments.forEach(c => {
-//       timeline.push({
-//         type: "COIN",
-//         createdAt: c.createdAt,
-//         data: c
-//       });
-//     });
-
-//     sellPayments.forEach(s => {
-//       timeline.push({
-//         type: "SELL",
-//         createdAt: s.createdAt,
-//         data: s
-//       });
-//     });
-
-//     // 3️⃣ Sort by date ASC
 //     timeline.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
 //     let runningGold = 0;
 //     let slNo = 1;
 //     const rows = [];
 
-//     // 4️⃣ Process each transaction
 //     for (const tx of timeline) {
 //       const goldRate = getGoldRateAtTime(goldRates, tx.createdAt);
 //       const beforeGold = Number(runningGold.toFixed(6));
@@ -457,10 +475,7 @@ const getGoldRateAtTime = (goldRates, createdAt) => {
 //       let gatewayCharges = "";
 //       let others = "";
 //       let totalAmount = "";
-//       let thruGateway = "";
-//       let fromWallet = "";
 
-//       // BUY
 //       if (tx.type === "BUY") {
 //         boughtGold = tx.data.gram_allocated || tx.data.gram || 0;
 //         runningGold += Number(boughtGold);
@@ -470,18 +485,15 @@ const getGoldRateAtTime = (goldRates, createdAt) => {
 //         totalAmount = tx.data.totalWithTax || "";
 
 //         txnChargeGrams = goldRate
-//           ? (Number(tx.data.taxAmount || 0) / goldRate)
+//           ? Number(tx.data.taxAmount || 0) / goldRate
 //           : 0;
 
 //         runningGold -= txnChargeGrams;
 //       }
 
-//       // COIN
 //       if (tx.type === "COIN") {
 //         const coinGrams = (tx.data.items || []).reduce(
-//           (sum, i) =>
-//             sum +
-//             Number(i.coinGrams || 0) * Number(i.quantity || 1),
+//           (s, i) => s + Number(i.coinGrams || 0) * Number(i.quantity || 1),
 //           0
 //         );
 
@@ -492,15 +504,14 @@ const getGoldRateAtTime = (goldRates, createdAt) => {
 //         others = tx.data.deliveryCharge || "";
 //         totalAmount = tx.data.amountPayable || "";
 
-//         const chargesINR =
+//         const charges =
 //           Number(tx.data.taxAmount || 0) +
 //           Number(tx.data.deliveryCharge || 0);
 
-//         txnChargeGrams = goldRate ? chargesINR / goldRate : 0;
+//         txnChargeGrams = goldRate ? charges / goldRate : 0;
 //         runningGold -= txnChargeGrams;
 //       }
 
-//       // SELL
 //       if (tx.type === "SELL") {
 //         soldGold = tx.data.gram || 0;
 //         runningGold -= Number(soldGold);
@@ -510,23 +521,21 @@ const getGoldRateAtTime = (goldRates, createdAt) => {
 //         gatewayCharges = tx.data.paymentGatewayCharges || "";
 //         others = tx.data.deliveryCharges || "";
 
-//         const chargesINR =
+//         const charges =
 //           Number(tx.data.taxAmount || 0) +
 //           Number(tx.data.paymentGatewayCharges || 0) +
 //           Number(tx.data.deliveryCharges || 0);
 
-//         txnChargeGrams = goldRate ? chargesINR / goldRate : 0;
+//         txnChargeGrams = goldRate ? charges / goldRate : 0;
 //         runningGold -= txnChargeGrams;
 //       }
 
-//       const afterGold = Number(runningGold.toFixed(6));
-
-//       rows.push({
-//         slNo: slNo++,
-//         date: new Date(tx.createdAt).toLocaleDateString("en-IN"),
-//         time: new Date(tx.createdAt).toLocaleTimeString("en-IN"),
-//         goldRate,
-//         availableGoldBefore: beforeGold,
+//       rows.push([
+//         slNo++,
+//         new Date(tx.createdAt).toLocaleDateString("en-IN"),
+//         new Date(tx.createdAt).toLocaleTimeString("en-IN"),
+//         goldRate || "",
+//         beforeGold,
 //         boughtGold,
 //         soldGold,
 //         coinPurchased,
@@ -535,51 +544,86 @@ const getGoldRateAtTime = (goldRates, createdAt) => {
 //         gatewayCharges,
 //         others,
 //         totalAmount,
-//         thruPaymentGateway: thruGateway,
-//         fromWallet,
-//         transactionalCharges: txnChargeGrams.toFixed(6),
-//         availableGoldAfter: afterGold
-//       });
+//         "",
+//         "",
+//         txnChargeGrams.toFixed(6),
+//         Number(runningGold.toFixed(6)),
+//       ]);
 //     }
 
-//     // 5️⃣ Excel
+//     // EXCEL
 //     const workbook = new ExcelJS.Workbook();
-//     const sheet = workbook.addWorksheet("Transaction Report");
+//     const sheet = workbook.addWorksheet("Gold Transaction Report");
 
-//     sheet.columns = [
-//       { header: "Sl No", key: "slNo", width: 8 },
-//       { header: "Date", key: "date", width: 14 },
-//       { header: "Time", key: "time", width: 14 },
-//       { header: "Gold rate per gm", key: "goldRate", width: 22 },
-//       { header: "Available Gold before", key: "availableGoldBefore", width: 24 },
-//       { header: "Bought in gms", key: "boughtGold", width: 16 },
-//       { header: "Sold in gms", key: "soldGold", width: 16 },
-//       { header: "Coin Purchased in gms", key: "coinPurchased", width: 22 },
-//       { header: "Gold Cost", key: "goldCost", width: 14 },
-//       { header: "GST", key: "gst", width: 12 },
-//       { header: "Gateway Charges", key: "gatewayCharges", width: 18 },
-//       { header: "Others", key: "others", width: 14 },
-//       { header: "Total Amount", key: "totalAmount", width: 16 },
-//       { header: "Thru Payment Gateway", key: "thruPaymentGateway", width: 22 },
-//       { header: "From Wallet", key: "fromWallet", width: 16 },
-//       { header: "Transactional charges in gms", key: "transactionalCharges", width: 28 },
-//       { header: "Available Gold after", key: "availableGoldAfter", width: 24 }
-//     ];
+//     sheet.addRow([`Customer Name : ${user?.name || "-"}`]);
+//     sheet.addRow([`Mobile Number : ${mobile}`]);
+//     sheet.addRow([]);
 
-//     sheet.addRows(rows);
+//     const headerRow = sheet.addRow([
+//       "Sl No",
+//       "Date",
+//       "Time",
+//       "Gold rate per gm",
+//       "Available Gold before",
+//       "Bought in gms",
+//       "Sold in gms",
+//       "Coin Purchased in gms",
+//       "Gold Cost",
+//       "GST",
+//       "Gateway Charges",
+//       "Others",
+//       "Total Amount",
+//       "Thru Payment Gateway",
+//       "From Wallet",
+//       "Transactional charges in gms",
+//       "Available Gold after",
+//     ]);
 
-//     res.setHeader(
-//       "Content-Type",
-//       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-//     );
+//     // Styles
+//     const headerStyle = {
+//       font: { bold: true, color: { argb: "FFFFFFFF" } },
+//       fill: {
+//         type: "pattern",
+//         pattern: "solid",
+//         fgColor: { argb: "4472C4" },
+//       },
+//       alignment: { vertical: "middle", horizontal: "center" },
+//       border: {
+//         top: { style: "medium" },
+//         left: { style: "medium" },
+//         bottom: { style: "medium" },
+//         right: { style: "medium" },
+//       },
+//     };
+
+//     headerRow.eachCell(cell => (cell.style = headerStyle));
+
+//     rows.forEach(r => {
+//       const row = sheet.addRow(r);
+//       row.eachCell(cell => {
+//         cell.alignment = { horizontal: "center", vertical: "middle" };
+//         cell.border = {
+//           top: { style: "thin" },
+//           left: { style: "thin" },
+//           bottom: { style: "thin" },
+//           right: { style: "thin" },
+//         };
+//       });
+//     });
+
+//     sheet.columns.forEach(col => (col.width = 20));
+
 //     res.setHeader(
 //       "Content-Disposition",
 //       `attachment; filename=transaction_report_${mobile}.xlsx`
 //     );
+//     res.setHeader(
+//       "Content-Type",
+//       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+//     );
 
 //     await workbook.xlsx.write(res);
 //     res.end();
-
 //   } catch (err) {
 //     console.error("generateTransactionReport error:", err);
 //     res.status(500).json({ message: "Failed to generate report" });
@@ -588,224 +632,234 @@ const getGoldRateAtTime = (goldRates, createdAt) => {
 
 
 
+// module.exports = {
+//     createSellPayment,
+//     approveSellPayment,
+//     cancelSellPayment,
+//     getAllSellPaymentHistoryForAdmin,
+//     getAllSellPaymentHistoryForUser,
+//     getApprovedSellPayment,
+//     createOtherCharges,
+//     getOtherCharges,
+//     updateOtherCharges,
+//     deleteOtherCharges,
+//     generateSellPaymentHistoryReport,
+//     generateTransactionReport,
+// };
+
+
+
+const CoinPayment = require("../models/coinPayment");
+
+
+/* ================= HELPER FUNCTIONS ================= */
+
+const applyBorder = cell => {
+  cell.border = {
+    top: { style: "medium" },
+    left: { style: "medium" },
+    bottom: { style: "medium" },
+    right: { style: "medium" }
+  };
+};
+
+const getGoldRateAtTime = (rates, date) => {
+  const rate = rates.find(r => new Date(r.timestamp) <= new Date(date));
+  return rate ? Number(rate.pricePerGram) : 0;
+};
+
+/* ================= CONTROLLER ================= */
 
 const generateTransactionReport = async (req, res) => {
   try {
     const { mobile, start_date, end_date } = req.body;
 
     if (!mobile) {
-      return res.status(400).json({ message: "Mobile number required" });
+      return res.status(400).json({ message: "mobile is required" });
     }
 
-    // Date filter
+    const startDate = start_date ? new Date(start_date) : null;
+    const endDate = end_date ? new Date(end_date) : null;
+
     const dateFilter = {};
-    if (start_date) dateFilter.$gte = new Date(start_date);
-    if (end_date) {
-      const end = new Date(end_date);
-      end.setHours(23, 59, 59, 999);
-      dateFilter.$lte = end;
+    if (startDate && endDate) {
+      dateFilter.createdAt = { $gte: startDate, $lte: endDate };
     }
 
-    const createdAtFilter =
-      Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {};
-
-    // Fetch user
+    /* ===== FETCH CUSTOMER ===== */
     const user = await User.findOne({ mobile }).lean();
+    const customerName = user?.name || "N/A";
 
-    // Fetch data
+    /* ===== FETCH DATA ===== */
     const [payments, coinPayments, sellPayments, goldRates] =
       await Promise.all([
-        Payment.find({ mobile, ...createdAtFilter }).lean(),
-        CoinPayment.find({ mobileNumber: mobile, ...createdAtFilter }).lean(),
-        SellPayment.find({ mobileNumber: mobile, ...createdAtFilter }).lean(),
-        GoldPrice.find().sort({ timestamp: -1 }).lean(),
+        Payment.find({ mobile, ...dateFilter }).lean(),
+        CoinPayment.find({ mobileNumber: mobile, ...dateFilter }).lean(),
+        SellPayment.find({ mobileNumber: mobile, ...dateFilter }).lean(),
+        GoldPrice.find().sort({ timestamp: -1 }).lean()
       ]);
 
-    // Timeline
+    /* ===== MERGE TIMELINE ===== */
     const timeline = [];
 
     payments.forEach(p =>
-      timeline.push({ type: "BUY", createdAt: p.createdAt, data: p })
+      timeline.push({ type: "BUY", date: p.createdAt, data: p })
     );
     coinPayments.forEach(c =>
-      timeline.push({ type: "COIN", createdAt: c.createdAt, data: c })
+      timeline.push({ type: "COIN", date: c.createdAt, data: c })
     );
     sellPayments.forEach(s =>
-      timeline.push({ type: "SELL", createdAt: s.createdAt, data: s })
+      timeline.push({ type: "SELL", date: s.createdAt, data: s })
     );
 
-    timeline.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
 
+    /* ===== PROCESS TRANSACTIONS ===== */
     let runningGold = 0;
     let slNo = 1;
     const rows = [];
 
     for (const tx of timeline) {
-      const goldRate = getGoldRateAtTime(goldRates, tx.createdAt);
+      const goldRate = getGoldRateAtTime(goldRates, tx.date);
       const beforeGold = Number(runningGold.toFixed(6));
 
-      let boughtGold = "";
-      let soldGold = "";
-      let coinPurchased = "";
-      let txnChargeGrams = 0;
-
-      let goldCost = "";
-      let gst = "";
-      let gatewayCharges = "";
-      let others = "";
-      let totalAmount = "";
+      let bought = "", sold = "", coin = "";
+      let goldCost = "", gst = "", gateway = "", others = "";
+      let totalAmount = "", txnChargeGms = 0;
 
       if (tx.type === "BUY") {
-        boughtGold = tx.data.gram_allocated || tx.data.gram || 0;
-        runningGold += Number(boughtGold);
+        bought = Number(tx.data.gram_allocated || tx.data.gram || 0);
+        runningGold += bought;
 
         goldCost = tx.data.amount || "";
         gst = tx.data.taxAmount || "";
         totalAmount = tx.data.totalWithTax || "";
 
-        txnChargeGrams = goldRate
-          ? Number(tx.data.taxAmount || 0) / goldRate
-          : 0;
-
-        runningGold -= txnChargeGrams;
+        txnChargeGms = goldRate ? gst / goldRate : 0;
+        runningGold -= txnChargeGms;
       }
 
       if (tx.type === "COIN") {
-        const coinGrams = (tx.data.items || []).reduce(
+        coin = (tx.data.items || []).reduce(
           (s, i) => s + Number(i.coinGrams || 0) * Number(i.quantity || 1),
           0
         );
 
-        coinPurchased = coinGrams;
-        runningGold -= coinGrams;
+        runningGold -= coin;
 
         gst = tx.data.taxAmount || "";
         others = tx.data.deliveryCharge || "";
         totalAmount = tx.data.amountPayable || "";
 
-        const charges =
-          Number(tx.data.taxAmount || 0) +
-          Number(tx.data.deliveryCharge || 0);
+        txnChargeGms = goldRate
+          ? (Number(gst) + Number(others)) / goldRate
+          : 0;
 
-        txnChargeGrams = goldRate ? charges / goldRate : 0;
-        runningGold -= txnChargeGrams;
+        runningGold -= txnChargeGms;
       }
 
       if (tx.type === "SELL") {
-        soldGold = tx.data.gram || 0;
-        runningGold -= Number(soldGold);
+        sold = Number(tx.data.gram || 0);
+        runningGold -= sold;
 
         goldCost = tx.data.amount || "";
         gst = tx.data.taxAmount || "";
-        gatewayCharges = tx.data.paymentGatewayCharges || "";
+        gateway = tx.data.paymentGatewayCharges || "";
         others = tx.data.deliveryCharges || "";
 
-        const charges =
-          Number(tx.data.taxAmount || 0) +
-          Number(tx.data.paymentGatewayCharges || 0) +
-          Number(tx.data.deliveryCharges || 0);
+        txnChargeGms = goldRate
+          ? (Number(gst) + Number(gateway) + Number(others)) / goldRate
+          : 0;
 
-        txnChargeGrams = goldRate ? charges / goldRate : 0;
-        runningGold -= txnChargeGrams;
+        runningGold -= txnChargeGms;
       }
 
-      rows.push([
-        slNo++,
-        new Date(tx.createdAt).toLocaleDateString("en-IN"),
-        new Date(tx.createdAt).toLocaleTimeString("en-IN"),
-        goldRate || "",
-        beforeGold,
-        boughtGold,
-        soldGold,
-        coinPurchased,
+      rows.push({
+        slNo: slNo++,
+        date: new Date(tx.date).toLocaleDateString("en-IN"),
+        time: new Date(tx.date).toLocaleTimeString("en-IN"),
+        goldRate,
+        availableBefore: beforeGold,
+        bought,
+        sold,
+        coin,
         goldCost,
         gst,
-        gatewayCharges,
+        gateway,
         others,
         totalAmount,
-        "",
-        "",
-        txnChargeGrams.toFixed(6),
-        Number(runningGold.toFixed(6)),
-      ]);
+        thruGateway: "",
+        fromWallet: "",
+        chargesGms: txnChargeGms.toFixed(6),
+        availableAfter: Number(runningGold.toFixed(6))
+      });
     }
 
-    // EXCEL
+    /* ===== EXCEL ===== */
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Gold Transaction Report");
+    const sheet = workbook.addWorksheet("Transaction Report");
 
-    sheet.addRow([`Customer Name : ${user?.name || "-"}`]);
-    sheet.addRow([`Mobile Number : ${mobile}`]);
+    // Customer Name (ONLY COLUMN A)
+    const customerRow = sheet.addRow([`Customer Name : ${customerName}`]);
+    const customerCell = customerRow.getCell(1);
+    customerCell.font = { bold: true };
+    applyBorder(customerCell);
+
+    // Mobile Number (ONLY COLUMN A)
+    const mobileRow = sheet.addRow([`Mobile Number : ${mobile}`]);
+    const mobileCell = mobileRow.getCell(1);
+    mobileCell.font = { bold: true };
+    applyBorder(mobileCell);
+
     sheet.addRow([]);
 
     const headerRow = sheet.addRow([
-      "Sl No",
-      "Date",
-      "Time",
-      "Gold rate per gm",
-      "Available Gold before",
-      "Bought in gms",
-      "Sold in gms",
-      "Coin Purchased in gms",
-      "Gold Cost",
-      "GST",
-      "Gateway Charges",
-      "Others",
-      "Total Amount",
-      "Thru Payment Gateway",
-      "From Wallet",
-      "Transactional charges in gms",
-      "Available Gold after",
+      "Sl No","Date","Time","Gold rate per gm",
+      "Available Gold before","Bought in Gms","Sold in Gms",
+      "Coin Purchased in Gms","Gold Cost","GST",
+      "Gateway Charges","Others","Total Amount",
+      "Thru Payment Gateway","From Wallet",
+      "Transactional charges in Gms","Available Gold after"
     ]);
 
-    // Styles
-    const headerStyle = {
-      font: { bold: true, color: { argb: "FFFFFFFF" } },
-      fill: {
+    headerRow.eachCell(cell => {
+      cell.font = { bold: true, color: { argb: "FFFFFF" } };
+      cell.fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: "4472C4" },
-      },
-      alignment: { vertical: "middle", horizontal: "center" },
-      border: {
-        top: { style: "medium" },
-        left: { style: "medium" },
-        bottom: { style: "medium" },
-        right: { style: "medium" },
-      },
-    };
-
-    headerRow.eachCell(cell => (cell.style = headerStyle));
+        fgColor: { argb: "4472C4" }
+      };
+      cell.alignment = { horizontal: "center" };
+      applyBorder(cell);
+    });
 
     rows.forEach(r => {
-      const row = sheet.addRow(r);
+      const row = sheet.addRow(Object.values(r));
       row.eachCell(cell => {
-        cell.alignment = { horizontal: "center", vertical: "middle" };
-        cell.border = {
-          top: { style: "thin" },
-          left: { style: "thin" },
-          bottom: { style: "thin" },
-          right: { style: "thin" },
-        };
+        cell.alignment = { horizontal: "center" };
+        applyBorder(cell);
       });
     });
 
-    sheet.columns.forEach(col => (col.width = 20));
+    sheet.columns.forEach(c => (c.width = 22));
+
 
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=transaction_report_${mobile}.xlsx`
+      `attachment; filename=transaction_report_${customerName}.xlsx`
     );
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
 
+
     await workbook.xlsx.write(res);
     res.end();
+
   } catch (err) {
     console.error("generateTransactionReport error:", err);
-    res.status(500).json({ message: "Failed to generate report" });
+    res.status(500).json({ message: "Report generation failed" });
   }
 };
 

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <button onclick="download()">Download Report</button>
+
+  <script>
+    function download() {
+      fetch("http://localhost:3000/api/generate-transaction-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mobile: "7676045226",
+          start_date: "2026-01-01",
+          end_date: "2026-01-31"
+        })
+      })
+      .then(res => res.blob())
+      .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "transaction_report.xlsx";
+        a.click();
+      });
+    }
+  </script>
+</body>
+</html>
