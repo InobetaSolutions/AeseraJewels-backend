@@ -3,10 +3,13 @@ const User = require("../models/User");
 const Payment = require("../models/Payment");
 const GoldPrice = require("../models/GoldPrice");
 const OtherCharges = require("../models/OtherCharges");
+const ExcelJS = require("exceljs");
+const fs = require("fs");
+const path = require("path");
 
 const createSellPayment = async (req, res) => {
     try {
-        const { mobileNumber, amount, gram, paymentGatewayCharges, taxAmount, otherCharges, paymentStatus } = req.body;
+        const { mobileNumber, amount, gram, paymentGatewayCharges, taxAmount, deliveryCharges, paymentStatus } = req.body;
 
         // Validate mobileNumber
         const mobileNumberRegex = /^[0-9]{10}$/;
@@ -50,8 +53,8 @@ const createSellPayment = async (req, res) => {
         }
 
         // Check if selling the entire totalAmount or totalGrams
-        if (amount && amount > latestTotalAmount - (paymentGatewayCharges || 0) - (taxAmount || 0) - (otherCharges || 0)) {
-            const maxSellableAmount = latestTotalAmount - (paymentGatewayCharges || 0) - (taxAmount || 0) - (otherCharges || 0);
+        if (amount && amount > latestTotalAmount - (paymentGatewayCharges || 0) - (taxAmount || 0) - (deliveryCharges || 0)) {
+            const maxSellableAmount = latestTotalAmount - (paymentGatewayCharges || 0) - (taxAmount || 0) - (deliveryCharges || 0);
             return res.status(400).json({
                 message: "Selling full amount not allowed",
                 maxSellableAmount: maxSellableAmount > 0 ? maxSellableAmount.toFixed(2) : 0
@@ -59,8 +62,8 @@ const createSellPayment = async (req, res) => {
         }
 
         // Check if selling the entire totalGrams
-        if (gram && gram >= latestTotalGrams - ((paymentGatewayCharges || 0) + (taxAmount || 0) + (otherCharges || 0)) / latestTotalAmount * latestTotalGrams) {
-            const maxSellableGrams = latestTotalGrams - ((paymentGatewayCharges || 0) + (taxAmount || 0) + (otherCharges || 0)) / latestTotalAmount * latestTotalGrams;
+        if (gram && gram >= latestTotalGrams - ((paymentGatewayCharges || 0) + (taxAmount || 0) + (deliveryCharges || 0)) / latestTotalAmount * latestTotalGrams) {
+            const maxSellableGrams = latestTotalGrams - ((paymentGatewayCharges || 0) + (taxAmount || 0) + (deliveryCharges || 0)) / latestTotalAmount * latestTotalGrams;
             return res.status(400).json({
                 message: "Selling full gram not allowed. Deductions like payment gateway charges, tax, and other charges must be accounted for.",
                 maxSellableGrams: maxSellableGrams > 0 ? maxSellableGrams.toFixed(4) : 0
@@ -74,7 +77,7 @@ const createSellPayment = async (req, res) => {
             gram,
             paymentGatewayCharges,
             taxAmount,
-            otherCharges,
+            deliveryCharges,
             paymentStatus
         });
 
@@ -102,7 +105,7 @@ const approveSellPayment = async (req, res) => {
             return res.status(404).json({ message: "Sell payment not found." });
         }
 
-        const { mobileNumber, amount, gram, taxAmount, paymentGatewayCharges, otherCharges } = sellPayment;
+        const { mobileNumber, amount, gram, taxAmount, paymentGatewayCharges, deliveryCharges } = sellPayment;
 
         // Fetch the latest confirmed payment for totals
         const latestPayment = await Payment.findOne({
@@ -119,7 +122,7 @@ const approveSellPayment = async (req, res) => {
         const oldTotalGrams = Number(latestPayment.totalGrams || 0);
 
         // Calculate total deductions
-        const totalDeductions = (taxAmount || 0) + (paymentGatewayCharges || 0) + (otherCharges || 0);
+        const totalDeductions = (taxAmount || 0) + (paymentGatewayCharges || 0) + (deliveryCharges || 0);
 
         let newTotalAmount = oldTotalAmount;
         let newTotalGrams = oldTotalGrams;
@@ -348,6 +351,243 @@ const deleteOtherCharges = async (req, res) => {
     }
 };
 
+// Generate Sell Payment History Report for a specific user
+const generateSellPaymentHistoryReport = async (req, res) => {
+    try {
+        const userId = req.user.id; // Assuming user ID is available in the auth middleware
+        const SellPayment = require("../models/sellPayment");
+
+        const sellPayments = await SellPayment.find({ userId }).sort({ createdAt: -1 });
+
+        const report = sellPayments.map((sellPayment) => ({
+            id: sellPayment._id,
+            amount: sellPayment.amount,
+            grams: sellPayment.grams,
+            status: sellPayment.status,
+            date: sellPayment.createdAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+        }));
+
+        res.json({
+            success: true,
+            message: "Sell payment history report generated successfully.",
+            data: report,
+        });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to generate sell payment history report." });
+    }
+};
+
+
+
+const CoinPayment = require("../models/coinPayment");
+/**
+ * Get gold rate at transaction time
+ */
+const getGoldRateAtTime = (goldRates, createdAt) => {
+  const txnTime = new Date(createdAt).getTime();
+  for (const g of goldRates) {
+    if (g.timestamp * 1000 <= txnTime) {
+      return Number(g.price_gram_24k);
+    }
+  }
+  return 0;
+};
+const generateTransactionReport = async (req, res) => {
+  try {
+    const { mobile } = req.query;
+    if (!mobile) {
+      return res.status(400).json({ message: "Mobile number required" });
+    }
+
+    // 1️⃣ Fetch all data
+    const [payments, coinPayments, sellPayments, goldRates] =
+      await Promise.all([
+        Payment.find({ mobile }).lean(),
+        CoinPayment.find({ mobileNumber: mobile }).lean(),
+        SellPayment.find({ mobileNumber: mobile }).lean(),
+        GoldPrice.find().sort({ timestamp: -1 }).lean()
+      ]);
+
+    // 2️⃣ Normalize all transactions into one timeline
+    const timeline = [];
+
+    payments.forEach(p => {
+      timeline.push({
+        type: "BUY",
+        createdAt: p.createdAt,
+        data: p
+      });
+    });
+
+    coinPayments.forEach(c => {
+      timeline.push({
+        type: "COIN",
+        createdAt: c.createdAt,
+        data: c
+      });
+    });
+
+    sellPayments.forEach(s => {
+      timeline.push({
+        type: "SELL",
+        createdAt: s.createdAt,
+        data: s
+      });
+    });
+
+    // 3️⃣ Sort by date ASC
+    timeline.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+    let runningGold = 0;
+    let slNo = 1;
+    const rows = [];
+
+    // 4️⃣ Process each transaction
+    for (const tx of timeline) {
+      const goldRate = getGoldRateAtTime(goldRates, tx.createdAt);
+      const beforeGold = Number(runningGold.toFixed(6));
+
+      let boughtGold = "";
+      let soldGold = "";
+      let coinPurchased = "";
+      let txnChargeGrams = 0;
+
+      let goldCost = "";
+      let gst = "";
+      let gatewayCharges = "";
+      let others = "";
+      let totalAmount = "";
+      let thruGateway = "";
+      let fromWallet = "";
+
+      // BUY
+      if (tx.type === "BUY") {
+        boughtGold = tx.data.gram_allocated || tx.data.gram || 0;
+        runningGold += Number(boughtGold);
+
+        goldCost = tx.data.amount || "";
+        gst = tx.data.taxAmount || "";
+        totalAmount = tx.data.totalWithTax || "";
+
+        txnChargeGrams = goldRate
+          ? (Number(tx.data.taxAmount || 0) / goldRate)
+          : 0;
+
+        runningGold -= txnChargeGrams;
+      }
+
+      // COIN
+      if (tx.type === "COIN") {
+        const coinGrams = (tx.data.items || []).reduce(
+          (sum, i) =>
+            sum +
+            Number(i.coinGrams || 0) * Number(i.quantity || 1),
+          0
+        );
+
+        coinPurchased = coinGrams;
+        runningGold -= coinGrams;
+
+        gst = tx.data.taxAmount || "";
+        others = tx.data.deliveryCharge || "";
+        totalAmount = tx.data.amountPayable || "";
+
+        const chargesINR =
+          Number(tx.data.taxAmount || 0) +
+          Number(tx.data.deliveryCharge || 0);
+
+        txnChargeGrams = goldRate ? chargesINR / goldRate : 0;
+        runningGold -= txnChargeGrams;
+      }
+
+      // SELL
+      if (tx.type === "SELL") {
+        soldGold = tx.data.gram || 0;
+        runningGold -= Number(soldGold);
+
+        goldCost = tx.data.amount || "";
+        gst = tx.data.taxAmount || "";
+        gatewayCharges = tx.data.paymentGatewayCharges || "";
+        others = tx.data.deliveryCharges || "";
+
+        const chargesINR =
+          Number(tx.data.taxAmount || 0) +
+          Number(tx.data.paymentGatewayCharges || 0) +
+          Number(tx.data.deliveryCharges || 0);
+
+        txnChargeGrams = goldRate ? chargesINR / goldRate : 0;
+        runningGold -= txnChargeGrams;
+      }
+
+      const afterGold = Number(runningGold.toFixed(6));
+
+      rows.push({
+        slNo: slNo++,
+        date: new Date(tx.createdAt).toLocaleDateString("en-IN"),
+        time: new Date(tx.createdAt).toLocaleTimeString("en-IN"),
+        goldRate,
+        availableGoldBefore: beforeGold,
+        boughtGold,
+        soldGold,
+        coinPurchased,
+        goldCost,
+        gst,
+        gatewayCharges,
+        others,
+        totalAmount,
+        thruPaymentGateway: thruGateway,
+        fromWallet,
+        transactionalCharges: txnChargeGrams.toFixed(6),
+        availableGoldAfter: afterGold
+      });
+    }
+
+    // 5️⃣ Excel
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Transaction Report");
+
+    sheet.columns = [
+      { header: "Sl No", key: "slNo", width: 8 },
+      { header: "Date", key: "date", width: 14 },
+      { header: "Time", key: "time", width: 14 },
+      { header: "Gold rate per gm", key: "goldRate", width: 22 },
+      { header: "Available Gold before", key: "availableGoldBefore", width: 24 },
+      { header: "Bought in gms", key: "boughtGold", width: 16 },
+      { header: "Sold in gms", key: "soldGold", width: 16 },
+      { header: "Coin Purchased in gms", key: "coinPurchased", width: 22 },
+      { header: "Gold Cost", key: "goldCost", width: 14 },
+      { header: "GST", key: "gst", width: 12 },
+      { header: "Gateway Charges", key: "gatewayCharges", width: 18 },
+      { header: "Others", key: "others", width: 14 },
+      { header: "Total Amount", key: "totalAmount", width: 16 },
+      { header: "Thru Payment Gateway", key: "thruPaymentGateway", width: 22 },
+      { header: "From Wallet", key: "fromWallet", width: 16 },
+      { header: "Transactional charges in gms", key: "transactionalCharges", width: 28 },
+      { header: "Available Gold after", key: "availableGoldAfter", width: 24 }
+    ];
+
+    sheet.addRows(rows);
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=transaction_report_${mobile}.xlsx`
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (err) {
+    console.error("generateTransactionReport error:", err);
+    res.status(500).json({ message: "Failed to generate report" });
+  }
+};
+
+
+
 module.exports = {
     createSellPayment,
     approveSellPayment,
@@ -359,4 +599,6 @@ module.exports = {
     getOtherCharges,
     updateOtherCharges,
     deleteOtherCharges,
+    generateSellPaymentHistoryReport,
+    generateTransactionReport,
 };

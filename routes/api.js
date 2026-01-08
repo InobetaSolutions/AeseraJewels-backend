@@ -65,6 +65,9 @@ router.get("/getFullPayment", paymentController.getFullPayment);
 router.post("/setAllotment", paymentController.setAllotment);
 router.get("/getByUserAllotment", paymentController.getByUserAllotment);
 
+// Report Generation APIs
+router.get("/generatePaymentHistoryReport", auth, paymentController.generatePaymentHistoryReport);
+
 // App Payment ENDS
 
 // Catalog Payment and Allotment STARTS
@@ -158,6 +161,10 @@ router.get("/getAllSellPaymentHistoryForAdmin", sellController.getAllSellPayment
 router.get("/getAllSellPaymentHistoryForUser", auth, sellController.getAllSellPaymentHistoryForUser);
 router.get("/getApprovedSellPayment", sellController.getApprovedSellPayment);
 router.post("/cancelSellPayment", sellController.cancelSellPayment);
+
+// Report Generation APIs
+router.get("/generateSellPaymentHistoryReport", auth, sellController.generateSellPaymentHistoryReport);
+router.get("/generateTransactionReport", sellController.generateTransactionReport);
 
 // Other Charges Routes
 router.post("/createOtherCharges", sellController.createOtherCharges);
