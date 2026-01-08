@@ -392,57 +392,254 @@ const getGoldRateAtTime = (goldRates, createdAt) => {
   }
   return 0;
 };
+// const generateTransactionReport = async (req, res) => {
+//   try {
+//     const { mobile } = req.query;
+//     if (!mobile) {
+//       return res.status(400).json({ message: "Mobile number required" });
+//     }
+
+//     // 1️⃣ Fetch all data
+//     const [payments, coinPayments, sellPayments, goldRates] =
+//       await Promise.all([
+//         Payment.find({ mobile }).lean(),
+//         CoinPayment.find({ mobileNumber: mobile }).lean(),
+//         SellPayment.find({ mobileNumber: mobile }).lean(),
+//         GoldPrice.find().sort({ timestamp: -1 }).lean()
+//       ]);
+
+//     // 2️⃣ Normalize all transactions into one timeline
+//     const timeline = [];
+
+//     payments.forEach(p => {
+//       timeline.push({
+//         type: "BUY",
+//         createdAt: p.createdAt,
+//         data: p
+//       });
+//     });
+
+//     coinPayments.forEach(c => {
+//       timeline.push({
+//         type: "COIN",
+//         createdAt: c.createdAt,
+//         data: c
+//       });
+//     });
+
+//     sellPayments.forEach(s => {
+//       timeline.push({
+//         type: "SELL",
+//         createdAt: s.createdAt,
+//         data: s
+//       });
+//     });
+
+//     // 3️⃣ Sort by date ASC
+//     timeline.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+//     let runningGold = 0;
+//     let slNo = 1;
+//     const rows = [];
+
+//     // 4️⃣ Process each transaction
+//     for (const tx of timeline) {
+//       const goldRate = getGoldRateAtTime(goldRates, tx.createdAt);
+//       const beforeGold = Number(runningGold.toFixed(6));
+
+//       let boughtGold = "";
+//       let soldGold = "";
+//       let coinPurchased = "";
+//       let txnChargeGrams = 0;
+
+//       let goldCost = "";
+//       let gst = "";
+//       let gatewayCharges = "";
+//       let others = "";
+//       let totalAmount = "";
+//       let thruGateway = "";
+//       let fromWallet = "";
+
+//       // BUY
+//       if (tx.type === "BUY") {
+//         boughtGold = tx.data.gram_allocated || tx.data.gram || 0;
+//         runningGold += Number(boughtGold);
+
+//         goldCost = tx.data.amount || "";
+//         gst = tx.data.taxAmount || "";
+//         totalAmount = tx.data.totalWithTax || "";
+
+//         txnChargeGrams = goldRate
+//           ? (Number(tx.data.taxAmount || 0) / goldRate)
+//           : 0;
+
+//         runningGold -= txnChargeGrams;
+//       }
+
+//       // COIN
+//       if (tx.type === "COIN") {
+//         const coinGrams = (tx.data.items || []).reduce(
+//           (sum, i) =>
+//             sum +
+//             Number(i.coinGrams || 0) * Number(i.quantity || 1),
+//           0
+//         );
+
+//         coinPurchased = coinGrams;
+//         runningGold -= coinGrams;
+
+//         gst = tx.data.taxAmount || "";
+//         others = tx.data.deliveryCharge || "";
+//         totalAmount = tx.data.amountPayable || "";
+
+//         const chargesINR =
+//           Number(tx.data.taxAmount || 0) +
+//           Number(tx.data.deliveryCharge || 0);
+
+//         txnChargeGrams = goldRate ? chargesINR / goldRate : 0;
+//         runningGold -= txnChargeGrams;
+//       }
+
+//       // SELL
+//       if (tx.type === "SELL") {
+//         soldGold = tx.data.gram || 0;
+//         runningGold -= Number(soldGold);
+
+//         goldCost = tx.data.amount || "";
+//         gst = tx.data.taxAmount || "";
+//         gatewayCharges = tx.data.paymentGatewayCharges || "";
+//         others = tx.data.deliveryCharges || "";
+
+//         const chargesINR =
+//           Number(tx.data.taxAmount || 0) +
+//           Number(tx.data.paymentGatewayCharges || 0) +
+//           Number(tx.data.deliveryCharges || 0);
+
+//         txnChargeGrams = goldRate ? chargesINR / goldRate : 0;
+//         runningGold -= txnChargeGrams;
+//       }
+
+//       const afterGold = Number(runningGold.toFixed(6));
+
+//       rows.push({
+//         slNo: slNo++,
+//         date: new Date(tx.createdAt).toLocaleDateString("en-IN"),
+//         time: new Date(tx.createdAt).toLocaleTimeString("en-IN"),
+//         goldRate,
+//         availableGoldBefore: beforeGold,
+//         boughtGold,
+//         soldGold,
+//         coinPurchased,
+//         goldCost,
+//         gst,
+//         gatewayCharges,
+//         others,
+//         totalAmount,
+//         thruPaymentGateway: thruGateway,
+//         fromWallet,
+//         transactionalCharges: txnChargeGrams.toFixed(6),
+//         availableGoldAfter: afterGold
+//       });
+//     }
+
+//     // 5️⃣ Excel
+//     const workbook = new ExcelJS.Workbook();
+//     const sheet = workbook.addWorksheet("Transaction Report");
+
+//     sheet.columns = [
+//       { header: "Sl No", key: "slNo", width: 8 },
+//       { header: "Date", key: "date", width: 14 },
+//       { header: "Time", key: "time", width: 14 },
+//       { header: "Gold rate per gm", key: "goldRate", width: 22 },
+//       { header: "Available Gold before", key: "availableGoldBefore", width: 24 },
+//       { header: "Bought in gms", key: "boughtGold", width: 16 },
+//       { header: "Sold in gms", key: "soldGold", width: 16 },
+//       { header: "Coin Purchased in gms", key: "coinPurchased", width: 22 },
+//       { header: "Gold Cost", key: "goldCost", width: 14 },
+//       { header: "GST", key: "gst", width: 12 },
+//       { header: "Gateway Charges", key: "gatewayCharges", width: 18 },
+//       { header: "Others", key: "others", width: 14 },
+//       { header: "Total Amount", key: "totalAmount", width: 16 },
+//       { header: "Thru Payment Gateway", key: "thruPaymentGateway", width: 22 },
+//       { header: "From Wallet", key: "fromWallet", width: 16 },
+//       { header: "Transactional charges in gms", key: "transactionalCharges", width: 28 },
+//       { header: "Available Gold after", key: "availableGoldAfter", width: 24 }
+//     ];
+
+//     sheet.addRows(rows);
+
+//     res.setHeader(
+//       "Content-Type",
+//       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+//     );
+//     res.setHeader(
+//       "Content-Disposition",
+//       `attachment; filename=transaction_report_${mobile}.xlsx`
+//     );
+
+//     await workbook.xlsx.write(res);
+//     res.end();
+
+//   } catch (err) {
+//     console.error("generateTransactionReport error:", err);
+//     res.status(500).json({ message: "Failed to generate report" });
+//   }
+// };
+
+
+
+
 const generateTransactionReport = async (req, res) => {
   try {
-    const { mobile } = req.query;
+    const { mobile, start_date, end_date } = req.body;
+
     if (!mobile) {
       return res.status(400).json({ message: "Mobile number required" });
     }
 
-    // 1️⃣ Fetch all data
+    // Date filter
+    const dateFilter = {};
+    if (start_date) dateFilter.$gte = new Date(start_date);
+    if (end_date) {
+      const end = new Date(end_date);
+      end.setHours(23, 59, 59, 999);
+      dateFilter.$lte = end;
+    }
+
+    const createdAtFilter =
+      Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {};
+
+    // Fetch user
+    const user = await User.findOne({ mobile }).lean();
+
+    // Fetch data
     const [payments, coinPayments, sellPayments, goldRates] =
       await Promise.all([
-        Payment.find({ mobile }).lean(),
-        CoinPayment.find({ mobileNumber: mobile }).lean(),
-        SellPayment.find({ mobileNumber: mobile }).lean(),
-        GoldPrice.find().sort({ timestamp: -1 }).lean()
+        Payment.find({ mobile, ...createdAtFilter }).lean(),
+        CoinPayment.find({ mobileNumber: mobile, ...createdAtFilter }).lean(),
+        SellPayment.find({ mobileNumber: mobile, ...createdAtFilter }).lean(),
+        GoldPrice.find().sort({ timestamp: -1 }).lean(),
       ]);
 
-    // 2️⃣ Normalize all transactions into one timeline
+    // Timeline
     const timeline = [];
 
-    payments.forEach(p => {
-      timeline.push({
-        type: "BUY",
-        createdAt: p.createdAt,
-        data: p
-      });
-    });
+    payments.forEach(p =>
+      timeline.push({ type: "BUY", createdAt: p.createdAt, data: p })
+    );
+    coinPayments.forEach(c =>
+      timeline.push({ type: "COIN", createdAt: c.createdAt, data: c })
+    );
+    sellPayments.forEach(s =>
+      timeline.push({ type: "SELL", createdAt: s.createdAt, data: s })
+    );
 
-    coinPayments.forEach(c => {
-      timeline.push({
-        type: "COIN",
-        createdAt: c.createdAt,
-        data: c
-      });
-    });
-
-    sellPayments.forEach(s => {
-      timeline.push({
-        type: "SELL",
-        createdAt: s.createdAt,
-        data: s
-      });
-    });
-
-    // 3️⃣ Sort by date ASC
     timeline.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
     let runningGold = 0;
     let slNo = 1;
     const rows = [];
 
-    // 4️⃣ Process each transaction
     for (const tx of timeline) {
       const goldRate = getGoldRateAtTime(goldRates, tx.createdAt);
       const beforeGold = Number(runningGold.toFixed(6));
@@ -457,10 +654,7 @@ const generateTransactionReport = async (req, res) => {
       let gatewayCharges = "";
       let others = "";
       let totalAmount = "";
-      let thruGateway = "";
-      let fromWallet = "";
 
-      // BUY
       if (tx.type === "BUY") {
         boughtGold = tx.data.gram_allocated || tx.data.gram || 0;
         runningGold += Number(boughtGold);
@@ -470,18 +664,15 @@ const generateTransactionReport = async (req, res) => {
         totalAmount = tx.data.totalWithTax || "";
 
         txnChargeGrams = goldRate
-          ? (Number(tx.data.taxAmount || 0) / goldRate)
+          ? Number(tx.data.taxAmount || 0) / goldRate
           : 0;
 
         runningGold -= txnChargeGrams;
       }
 
-      // COIN
       if (tx.type === "COIN") {
         const coinGrams = (tx.data.items || []).reduce(
-          (sum, i) =>
-            sum +
-            Number(i.coinGrams || 0) * Number(i.quantity || 1),
+          (s, i) => s + Number(i.coinGrams || 0) * Number(i.quantity || 1),
           0
         );
 
@@ -492,15 +683,14 @@ const generateTransactionReport = async (req, res) => {
         others = tx.data.deliveryCharge || "";
         totalAmount = tx.data.amountPayable || "";
 
-        const chargesINR =
+        const charges =
           Number(tx.data.taxAmount || 0) +
           Number(tx.data.deliveryCharge || 0);
 
-        txnChargeGrams = goldRate ? chargesINR / goldRate : 0;
+        txnChargeGrams = goldRate ? charges / goldRate : 0;
         runningGold -= txnChargeGrams;
       }
 
-      // SELL
       if (tx.type === "SELL") {
         soldGold = tx.data.gram || 0;
         runningGold -= Number(soldGold);
@@ -510,23 +700,21 @@ const generateTransactionReport = async (req, res) => {
         gatewayCharges = tx.data.paymentGatewayCharges || "";
         others = tx.data.deliveryCharges || "";
 
-        const chargesINR =
+        const charges =
           Number(tx.data.taxAmount || 0) +
           Number(tx.data.paymentGatewayCharges || 0) +
           Number(tx.data.deliveryCharges || 0);
 
-        txnChargeGrams = goldRate ? chargesINR / goldRate : 0;
+        txnChargeGrams = goldRate ? charges / goldRate : 0;
         runningGold -= txnChargeGrams;
       }
 
-      const afterGold = Number(runningGold.toFixed(6));
-
-      rows.push({
-        slNo: slNo++,
-        date: new Date(tx.createdAt).toLocaleDateString("en-IN"),
-        time: new Date(tx.createdAt).toLocaleTimeString("en-IN"),
-        goldRate,
-        availableGoldBefore: beforeGold,
+      rows.push([
+        slNo++,
+        new Date(tx.createdAt).toLocaleDateString("en-IN"),
+        new Date(tx.createdAt).toLocaleTimeString("en-IN"),
+        goldRate || "",
+        beforeGold,
         boughtGold,
         soldGold,
         coinPurchased,
@@ -535,51 +723,86 @@ const generateTransactionReport = async (req, res) => {
         gatewayCharges,
         others,
         totalAmount,
-        thruPaymentGateway: thruGateway,
-        fromWallet,
-        transactionalCharges: txnChargeGrams.toFixed(6),
-        availableGoldAfter: afterGold
-      });
+        "",
+        "",
+        txnChargeGrams.toFixed(6),
+        Number(runningGold.toFixed(6)),
+      ]);
     }
 
-    // 5️⃣ Excel
+    // EXCEL
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Transaction Report");
+    const sheet = workbook.addWorksheet("Gold Transaction Report");
 
-    sheet.columns = [
-      { header: "Sl No", key: "slNo", width: 8 },
-      { header: "Date", key: "date", width: 14 },
-      { header: "Time", key: "time", width: 14 },
-      { header: "Gold rate per gm", key: "goldRate", width: 22 },
-      { header: "Available Gold before", key: "availableGoldBefore", width: 24 },
-      { header: "Bought in gms", key: "boughtGold", width: 16 },
-      { header: "Sold in gms", key: "soldGold", width: 16 },
-      { header: "Coin Purchased in gms", key: "coinPurchased", width: 22 },
-      { header: "Gold Cost", key: "goldCost", width: 14 },
-      { header: "GST", key: "gst", width: 12 },
-      { header: "Gateway Charges", key: "gatewayCharges", width: 18 },
-      { header: "Others", key: "others", width: 14 },
-      { header: "Total Amount", key: "totalAmount", width: 16 },
-      { header: "Thru Payment Gateway", key: "thruPaymentGateway", width: 22 },
-      { header: "From Wallet", key: "fromWallet", width: 16 },
-      { header: "Transactional charges in gms", key: "transactionalCharges", width: 28 },
-      { header: "Available Gold after", key: "availableGoldAfter", width: 24 }
-    ];
+    sheet.addRow([`Customer Name : ${user?.name || "-"}`]);
+    sheet.addRow([`Mobile Number : ${mobile}`]);
+    sheet.addRow([]);
 
-    sheet.addRows(rows);
+    const headerRow = sheet.addRow([
+      "Sl No",
+      "Date",
+      "Time",
+      "Gold rate per gm",
+      "Available Gold before",
+      "Bought in gms",
+      "Sold in gms",
+      "Coin Purchased in gms",
+      "Gold Cost",
+      "GST",
+      "Gateway Charges",
+      "Others",
+      "Total Amount",
+      "Thru Payment Gateway",
+      "From Wallet",
+      "Transactional charges in gms",
+      "Available Gold after",
+    ]);
 
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
+    // Styles
+    const headerStyle = {
+      font: { bold: true, color: { argb: "FFFFFFFF" } },
+      fill: {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "4472C4" },
+      },
+      alignment: { vertical: "middle", horizontal: "center" },
+      border: {
+        top: { style: "medium" },
+        left: { style: "medium" },
+        bottom: { style: "medium" },
+        right: { style: "medium" },
+      },
+    };
+
+    headerRow.eachCell(cell => (cell.style = headerStyle));
+
+    rows.forEach(r => {
+      const row = sheet.addRow(r);
+      row.eachCell(cell => {
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
+      });
+    });
+
+    sheet.columns.forEach(col => (col.width = 20));
+
     res.setHeader(
       "Content-Disposition",
       `attachment; filename=transaction_report_${mobile}.xlsx`
     );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
 
     await workbook.xlsx.write(res);
     res.end();
-
   } catch (err) {
     console.error("generateTransactionReport error:", err);
     res.status(500).json({ message: "Failed to generate report" });
