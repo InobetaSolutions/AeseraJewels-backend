@@ -243,21 +243,32 @@ const getAllSellPaymentHistoryForAdmin = async (req, res) => {
   try {
     const sellPayments = await SellPayment.find().sort({ createdAt: -1 });
 
-    const formattedSellPayments = await Promise.all(
-      sellPayments.map(async (sp) => {
-        const user = await User.findOne({ phone: sp.mobile }).select("name");
+    // ✅ get unique mobile numbers from SellPayment
+    const mobiles = [
+      ...new Set(sellPayments.map((sp) => String(sp.mobileNumber))),
+    ];
 
-        return {
-          ...sp._doc,
-          user_name: user ? user.name : null,
-          timestamp: sp.updatedAt
-            ? new Date(sp.updatedAt).toLocaleString("en-IN", {
-                timeZone: "Asia/Kolkata",
-              })
-            : null,
-        };
-      })
-    );
+    // ✅ fetch users by mobile field
+    const users = await User.find({
+      mobile: { $in: mobiles },
+    }).select("name mobile");
+
+    // ✅ map mobile -> name
+    const userMap = {};
+    users.forEach((u) => {
+      userMap[String(u.mobile)] = u.name;
+    });
+
+    // ✅ attach name to each sell payment
+    const formattedSellPayments = sellPayments.map((sp) => ({
+      ...sp._doc,
+      user_name: userMap[String(sp.mobileNumber)] || null,
+      timestamp: sp.updatedAt
+        ? new Date(sp.updatedAt).toLocaleString("en-IN", {
+            timeZone: "Asia/Kolkata",
+          })
+        : null,
+    }));
 
     res.status(200).json({
       success: true,
@@ -269,6 +280,7 @@ const getAllSellPaymentHistoryForAdmin = async (req, res) => {
     res.status(500).json({ error: "Server error." });
   }
 };
+
 
 const getAllSellPaymentHistoryForUser = async (req, res) => {
     try {
