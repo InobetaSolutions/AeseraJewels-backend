@@ -217,25 +217,57 @@ const cancelSellPayment = async (req, res) => {
     }
 };
 
-const getAllSellPaymentHistoryForAdmin = async (req, res) => {
-    try {
-        const sellPayments = await SellPayment.find().sort({ createdAt: -1 });
-        const formattedSellPayments = sellPayments.map((sp) => ({
-            ...sp._doc,
-            timestamp: sp.updatedAt
-                ? new Date(sp.updatedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
-                : null,
-        }));
+// const getAllSellPaymentHistoryForAdmin = async (req, res) => {
+//     try {
+//         const sellPayments = await SellPayment.find().sort({ createdAt: -1 });
+//         const formattedSellPayments = sellPayments.map((sp) => ({
+//             ...sp._doc,
+//             timestamp: sp.updatedAt
+//                 ? new Date(sp.updatedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
+//                 : null,
+//         }));
 
-        res.status(200).json({
-            success: true,
-            message: "All sell payment history fetched successfully.",
-            data: formattedSellPayments,
-        });
-    } catch (error) {
-        console.error("Error in getAllSellPaymentHistoryForAdmin:", error);
-        res.status(500).json({ error: "Server error." });
-    }
+//         res.status(200).json({
+//             success: true,
+//             message: "All sell payment history fetched successfully.",
+//             data: formattedSellPayments,
+//         });
+//     } catch (error) {
+//         console.error("Error in getAllSellPaymentHistoryForAdmin:", error);
+//         res.status(500).json({ error: "Server error." });
+//     }
+// };
+
+
+const getAllSellPaymentHistoryForAdmin = async (req, res) => {
+  try {
+    const sellPayments = await SellPayment.find().sort({ createdAt: -1 });
+
+    const formattedSellPayments = await Promise.all(
+      sellPayments.map(async (sp) => {
+        const user = await User.findOne({ phone: sp.mobile }).select("name");
+
+        return {
+          ...sp._doc,
+          user_name: user ? user.name : null,
+          timestamp: sp.updatedAt
+            ? new Date(sp.updatedAt).toLocaleString("en-IN", {
+                timeZone: "Asia/Kolkata",
+              })
+            : null,
+        };
+      })
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "All sell payment history fetched successfully.",
+      data: formattedSellPayments,
+    });
+  } catch (error) {
+    console.error("Error in getAllSellPaymentHistoryForAdmin:", error);
+    res.status(500).json({ error: "Server error." });
+  }
 };
 
 const getAllSellPaymentHistoryForUser = async (req, res) => {
