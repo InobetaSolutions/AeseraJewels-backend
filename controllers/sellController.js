@@ -186,26 +186,47 @@ const approveSellPayment = async (req, res) => {
   try {
     const { id } = req.body;
 
-    // ----------------- VALIDATION -----------------
+    console.log("====== APPROVE SELL PAYMENT START ======");
+
+    // ----------------- BASIC VALIDATION -----------------
     if (!id) {
+      console.log("❌ Missing payment ID");
       return res.status(400).json({ message: "Payment ID is required." });
     }
 
     const sellPayment = await SellPayment.findById(id);
     if (!sellPayment) {
+      console.log("❌ Sell payment not found:", id);
       return res.status(404).json({ message: "Sell payment not found." });
+    }
+
+    if (sellPayment.paymentStatus === "Approve Confirmed") {
+      console.log("⚠️ Already approved:", id);
+      return res.status(400).json({ message: "Sell payment already approved." });
     }
 
     const {
       mobileNumber,
       amount,
-      gram, // only for response
+      gram,
       taxAmount = 0,
       paymentGatewayCharges = 0,
       deliveryCharges = 0
     } = sellPayment;
 
-    if (!amount || amount <= 0) {
+    const sellAmount = Number(amount);
+
+    console.log("SellPayment Data:", {
+      mobileNumber,
+      sellAmount,
+      gram,
+      taxAmount,
+      paymentGatewayCharges,
+      deliveryCharges
+    });
+
+    if (!sellAmount || sellAmount <= 0) {
+      console.log("❌ Invalid sell amount:", sellAmount);
       return res.status(400).json({ message: "Valid amount is required." });
     }
 
@@ -216,58 +237,112 @@ const approveSellPayment = async (req, res) => {
     }).sort({ createdAt: -1 });
 
     if (!latestPayment) {
+      console.log("❌ Wallet not found for:", mobileNumber);
       return res.status(404).json({
-        message: "No confirmed payment found for this mobile number."
+        message: "No confirmed wallet found for this mobile number."
       });
     }
 
     // ----------------- WALLET VALUES -----------------
     const oldTotalAmount = Number(latestPayment.totalAmount || 0);
-    const oldTotalGrams  = Number(latestPayment.gold || latestPayment.totalGrams || 0);
+    const oldTotalGrams  = Number(latestPayment.totalGrams || latestPayment.gold || 0);
 
-    // ----------------- DEDUCTIONS -----------------
+    console.log("Wallet BEFORE Sell:", {
+      oldTotalAmount,
+      oldTotalGrams,
+      walletDoc: latestPayment._id
+    });
+
+    if (oldTotalAmount <= 0 || oldTotalGrams <= 0) {
+      console.log("❌ Invalid wallet balances");
+      return res.status(400).json({ message: "Wallet balance is invalid." });
+    }
+
+    // ----------------- TOTAL MONEY DEDUCTION -----------------
     const totalDeductions =
-      Number(amount) +
+      sellAmount +
       Number(taxAmount) +
       Number(paymentGatewayCharges) +
       Number(deliveryCharges);
 
+    console.log("Total Deductions:", totalDeductions);
+
     if (totalDeductions > oldTotalAmount) {
+      console.log("❌ Insufficient wallet amount");
       return res.status(400).json({
         message: "Insufficient wallet balance for this sell."
       });
     }
 
-    // ----------------- NEW WALLET TOTALS (PRICE PER GRAM METHOD) -----------------
+    // ----------------- FETCH CURRENT GOLD RATE -----------------
+    const lastRate = await GoldPrice.findOne().sort({ timestamp: -1 });
+
+    console.log("Gold Rate Record:", lastRate);
+
+    if (!lastRate || !lastRate.price_gram_24k) {
+      console.log("❌ Gold rate not available");
+      return res.status(500).json({ message: "Gold rate not available." });
+    }
+
+    const pricePerGram = Number(lastRate.price_gram_24k);
+
+    console.log("Price Per Gram (Current Rate):", pricePerGram);
+
+    // ----------------- GRAMS DEDUCTED -----------------
+    const gramsDeducted = totalDeductions / pricePerGram;
+
+    console.log("Grams Deducted:", gramsDeducted);
+
+    if (gramsDeducted > oldTotalGrams) {
+      console.log("❌ Insufficient gold balance");
+      return res.status(400).json({
+        message: "Insufficient gold balance."
+      });
+    }
+
+    // ----------------- NEW WALLET TOTALS -----------------
     const newTotalAmount = Number((oldTotalAmount - totalDeductions).toFixed(2));
+    let newTotalGrams = Number((oldTotalGrams - gramsDeducted).toFixed(4));
 
-    let newTotalGrams = 0;
+    console.log("Wallet AFTER Sell (Calculated):", {
+      newTotalAmount,
+      newTotalGrams
+    });
 
-    if (oldTotalGrams > 0 && oldTotalAmount > 0) {
-      const pricePerGram = oldTotalAmount / oldTotalGrams; // wallet avg rate
-      const gramDeducted = totalDeductions / pricePerGram;
-
-      newTotalGrams = Number((oldTotalGrams - gramDeducted).toFixed(4));
-      if (newTotalGrams < 0) newTotalGrams = 0;
+    if (newTotalAmount <= 0 || newTotalGrams <= 0) {
+      console.log("⚠️ Wallet reached zero");
+      newTotalGrams = 0;
     }
 
     // ----------------- UPDATE WALLET -----------------
     latestPayment.totalAmount = newTotalAmount;
-    latestPayment.gold = newTotalGrams;        // real wallet grams
-    latestPayment.totalGrams = newTotalGrams; // keep in sync for history
+    latestPayment.gold = newTotalGrams;
+    latestPayment.totalGrams = newTotalGrams;
+
+    console.log("Wallet BEFORE SAVE:", {
+      save_totalAmount: latestPayment.totalAmount,
+      save_gold: latestPayment.gold,
+      save_totalGrams: latestPayment.totalGrams
+    });
 
     await latestPayment.save();
+
+    console.log("✅ Wallet Updated Successfully");
 
     // ----------------- UPDATE SELL STATUS -----------------
     sellPayment.paymentStatus = "Approve Confirmed";
     await sellPayment.save();
+
+    console.log("✅ Sell Payment Approved:", sellPayment._id);
+
+    console.log("====== APPROVE SELL PAYMENT END ======");
 
     // ----------------- RESPONSE -----------------
     return res.status(200).json({
       message: "Sell payment approved successfully.",
       sellPayment: {
         ...sellPayment.toObject(),
-        gram // returned exactly as created
+        gram
       },
       updatedTotals: {
         totalAmount: newTotalAmount,
@@ -276,12 +351,13 @@ const approveSellPayment = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error in approveSellPayment:", error);
+    console.error("🔥 Error in approveSellPayment:", error);
     return res.status(500).json({
       message: "An error occurred while approving the sell payment."
     });
   }
 };
+
 
 
 // const approveSellPayment = async (req, res) => {
