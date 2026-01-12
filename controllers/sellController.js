@@ -182,101 +182,203 @@ const createSellPayment = async (req, res) => {
 //     }
 // };
 
+// const approveSellPayment = async (req, res) => {
+//     try {
+//         const { id } = req.body;
+
+//         // Validate ID
+//         if (!id) {
+//             return res.status(400).json({ message: "Payment ID is required." });
+//         }
+
+//         // Find the sell payment
+//         const sellPayment = await SellPayment.findById(id);
+//         if (!sellPayment) {
+//             return res.status(404).json({ message: "Sell payment not found." });
+//         }
+
+//         const {
+//             mobileNumber,
+//             amount,
+//             gram, // ONLY for response
+//             taxAmount = 0,
+//             paymentGatewayCharges = 0,
+//             deliveryCharges = 0
+//         } = sellPayment;
+
+//         // Validate amount
+//         if (!amount || amount <= 0) {
+//             return res.status(400).json({ message: "Valid amount is required for approval." });
+//         }
+
+//         // Fetch latest confirmed payment
+//         const latestPayment = await Payment.findOne({
+//             mobile: mobileNumber,
+//             status: "Payment Confirmed",
+//         }).sort({ createdAt: -1 });
+
+//         if (!latestPayment) {
+//             return res.status(404).json({
+//                 message: "No confirmed payment found for this mobile number."
+//             });
+//         }
+
+//         // Old totals
+//         const oldTotalAmount = Number(latestPayment.totalAmount || 0);
+//         const oldTotalGrams = Number(latestPayment.totalGrams || 0);
+
+//         // Calculate total deductions (amount-based only)
+//         const totalDeductions =
+//             amount + taxAmount + paymentGatewayCharges + deliveryCharges;
+
+//         // New total amount
+//         let newTotalAmount = Math.max(0, oldTotalAmount - totalDeductions);
+//         newTotalAmount = Math.round(newTotalAmount);
+
+//         // New total grams (proportional to amount)
+//         let newTotalGrams = 0;
+//         if (oldTotalAmount > 0 && oldTotalGrams > 0) {
+//             newTotalGrams = Math.round(
+//                 oldTotalGrams * (newTotalAmount / oldTotalAmount)
+//             );
+//         }
+
+//         // If amount becomes zero, grams must be zero
+//         if (newTotalAmount === 0) {
+//             newTotalGrams = 0;
+//         }
+
+//         // Update latest payment
+//         latestPayment.totalAmount = newTotalAmount;
+//         latestPayment.totalGrams = newTotalGrams;
+//         await latestPayment.save();
+
+//         // Update sell payment status
+//         sellPayment.paymentStatus = "Approve Confirmed";
+//         await sellPayment.save();
+
+//         // Final response
+//         res.status(200).json({
+//             message: "Sell payment approved successfully.",
+//             sellPayment: {
+//                 ...sellPayment.toObject(),
+//                 gram // returned exactly as created
+//             },
+//             updatedTotals: {
+//                 totalAmount: newTotalAmount,
+//                 totalGrams: newTotalGrams
+//             }
+//         });
+
+//     } catch (error) {
+//         console.error("Error in approveSellPayment:", error);
+//         res.status(500).json({
+//             message: "An error occurred while approving the sell payment."
+//         });
+//     }
+// };
+
+
 const approveSellPayment = async (req, res) => {
-    try {
-        const { id } = req.body;
+  try {
+    const { id } = req.body;
 
-        // Validate ID
-        if (!id) {
-            return res.status(400).json({ message: "Payment ID is required." });
-        }
-
-        // Find the sell payment
-        const sellPayment = await SellPayment.findById(id);
-        if (!sellPayment) {
-            return res.status(404).json({ message: "Sell payment not found." });
-        }
-
-        const {
-            mobileNumber,
-            amount,
-            gram, // ONLY for response
-            taxAmount = 0,
-            paymentGatewayCharges = 0,
-            deliveryCharges = 0
-        } = sellPayment;
-
-        // Validate amount
-        if (!amount || amount <= 0) {
-            return res.status(400).json({ message: "Valid amount is required for approval." });
-        }
-
-        // Fetch latest confirmed payment
-        const latestPayment = await Payment.findOne({
-            mobile: mobileNumber,
-            status: "Payment Confirmed",
-        }).sort({ createdAt: -1 });
-
-        if (!latestPayment) {
-            return res.status(404).json({
-                message: "No confirmed payment found for this mobile number."
-            });
-        }
-
-        // Old totals
-        const oldTotalAmount = Number(latestPayment.totalAmount || 0);
-        const oldTotalGrams = Number(latestPayment.totalGrams || 0);
-
-        // Calculate total deductions (amount-based only)
-        const totalDeductions =
-            amount + taxAmount + paymentGatewayCharges + deliveryCharges;
-
-        // New total amount
-        let newTotalAmount = Math.max(0, oldTotalAmount - totalDeductions);
-        newTotalAmount = Math.round(newTotalAmount);
-
-        // New total grams (proportional to amount)
-        let newTotalGrams = 0;
-        if (oldTotalAmount > 0 && oldTotalGrams > 0) {
-            newTotalGrams = Math.round(
-                oldTotalGrams * (newTotalAmount / oldTotalAmount)
-            );
-        }
-
-        // If amount becomes zero, grams must be zero
-        if (newTotalAmount === 0) {
-            newTotalGrams = 0;
-        }
-
-        // Update latest payment
-        latestPayment.totalAmount = newTotalAmount;
-        latestPayment.totalGrams = newTotalGrams;
-        await latestPayment.save();
-
-        // Update sell payment status
-        sellPayment.paymentStatus = "Approve Confirmed";
-        await sellPayment.save();
-
-        // Final response
-        res.status(200).json({
-            message: "Sell payment approved successfully.",
-            sellPayment: {
-                ...sellPayment.toObject(),
-                gram // returned exactly as created
-            },
-            updatedTotals: {
-                totalAmount: newTotalAmount,
-                totalGrams: newTotalGrams
-            }
-        });
-
-    } catch (error) {
-        console.error("Error in approveSellPayment:", error);
-        res.status(500).json({
-            message: "An error occurred while approving the sell payment."
-        });
+    // ----------------- VALIDATION -----------------
+    if (!id) {
+      return res.status(400).json({ message: "Payment ID is required." });
     }
+
+    const sellPayment = await SellPayment.findById(id);
+    if (!sellPayment) {
+      return res.status(404).json({ message: "Sell payment not found." });
+    }
+
+    const {
+      mobileNumber,
+      amount,
+      gram, // only for response
+      taxAmount = 0,
+      paymentGatewayCharges = 0,
+      deliveryCharges = 0
+    } = sellPayment;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ message: "Valid amount is required." });
+    }
+
+    // ----------------- FETCH WALLET -----------------
+    const latestPayment = await Payment.findOne({
+      mobile: mobileNumber,
+      status: "Payment Confirmed",
+    }).sort({ createdAt: -1 });
+
+    if (!latestPayment) {
+      return res.status(404).json({
+        message: "No confirmed payment found for this mobile number."
+      });
+    }
+
+    // ----------------- WALLET VALUES -----------------
+    const oldTotalAmount = Number(latestPayment.totalAmount || 0);
+    const oldTotalGrams  = Number(latestPayment.gold || 0); // use gold
+
+    // ----------------- DEDUCTIONS -----------------
+    const totalDeductions =
+      Number(amount) +
+      Number(taxAmount) +
+      Number(paymentGatewayCharges) +
+      Number(deliveryCharges);
+
+    if (totalDeductions > oldTotalAmount) {
+      return res.status(400).json({
+        message: "Insufficient wallet balance for this sell."
+      });
+    }
+
+    // ----------------- NEW WALLET TOTALS -----------------
+    const newTotalAmount = Number((oldTotalAmount - totalDeductions).toFixed(2));
+
+    let newTotalGrams = 0;
+    if (oldTotalAmount > 0 && oldTotalGrams > 0) {
+      newTotalGrams = Number(
+        (oldTotalGrams * (newTotalAmount / oldTotalAmount)).toFixed(4)
+      );
+    }
+
+    if (newTotalAmount <= 0) newTotalGrams = 0;
+
+    // ----------------- UPDATE WALLET -----------------
+    latestPayment.totalAmount = newTotalAmount;
+    latestPayment.gold = newTotalGrams;        // real wallet grams
+    latestPayment.totalGrams = newTotalGrams; // keep in sync for history
+
+    await latestPayment.save();
+
+    // ----------------- UPDATE SELL STATUS -----------------
+    sellPayment.paymentStatus = "Approve Confirmed";
+    await sellPayment.save();
+
+    // ----------------- RESPONSE -----------------
+    return res.status(200).json({
+      message: "Sell payment approved successfully.",
+      sellPayment: {
+        ...sellPayment.toObject(),
+        gram // returned exactly as created
+      },
+      updatedTotals: {
+        totalAmount: newTotalAmount,
+        totalGrams: newTotalGrams
+      }
+    });
+
+  } catch (error) {
+    console.error("Error in approveSellPayment:", error);
+    return res.status(500).json({
+      message: "An error occurred while approving the sell payment."
+    });
+  }
 };
+
 
 
 const cancelSellPayment = async (req, res) => {
