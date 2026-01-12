@@ -851,6 +851,239 @@ const getGoldRateAtTime = (rates, date) => {
 //     res.status(500).json({ message: "Report generation failed" });
 //   }
 // };
+// const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+
+// /* ===== IST DATE → UTC RANGE ===== */
+// const istDateRangeToUTC = (start, end) => {
+//   const s = new Date(start);
+//   s.setHours(0, 0, 0, 0);
+
+//   const e = new Date(end);
+//   e.setHours(23, 59, 59, 999);
+
+//   return {
+//     startUTC: new Date(s.getTime() - IST_OFFSET),
+//     endUTC: new Date(e.getTime() - IST_OFFSET)
+//   };
+// };
+
+// const generateTransactionReport = async (req, res) => {
+//   try {
+//     const { mobile, start_date, end_date } = req.body;
+
+//     if (!mobile) {
+//       return res.status(400).json({ message: "mobile is required" });
+//     }
+
+//     /* ===== DATE FILTER (IST) ===== */
+//     const dateFilter = {};
+//     if (start_date && end_date) {
+//       const { startUTC, endUTC } = istDateRangeToUTC(start_date, end_date);
+//       dateFilter.createdAt = { $gte: startUTC, $lte: endUTC };
+//     }
+
+//     /* ===== CUSTOMER ===== */
+//     const user = await User.findOne({ mobile }).lean();
+//     const customerName = user?.name || "N/A";
+
+//     /* ===== FETCH DATA ===== */
+//     const [payments, coinPayments, sellPayments, goldRates] =
+//       await Promise.all([
+//         Payment.find({ mobile, ...dateFilter }).lean(),
+//         CoinPayment.find({ mobileNumber: mobile, ...dateFilter }).lean(),
+//         SellPayment.find({ mobileNumber: mobile, ...dateFilter }).lean(),
+
+//         // GoldPrice uses timestamp (seconds)
+//         GoldPrice.find().sort({ timestamp: 1 }).lean() // oldest → newest
+//       ]);
+
+//     /* ===== GOLD RATE MATCH (HISTORICAL) ===== */
+//     const getGoldRateAtTime = (rates, txDate) => {
+//       if (!rates || !rates.length) return "";
+
+//       const txSec = Math.floor(new Date(txDate).getTime() / 1000);
+
+//       let match = null;
+//       for (const r of rates) {
+//         if (Number(r.timestamp) <= txSec) match = r;
+//         else break;
+//       }
+
+//       if (!match) match = rates[rates.length - 1];
+
+//       return match.price_gram_24k || "";
+//     };
+
+//     /* ===== MERGE TIMELINE ===== */
+//     const timeline = [];
+
+//     payments.forEach(p =>
+//       timeline.push({ type: "BUY", date: p.createdAt, data: p })
+//     );
+//     coinPayments.forEach(c =>
+//       timeline.push({ type: "COIN", date: c.createdAt, data: c })
+//     );
+//     sellPayments.forEach(s =>
+//       timeline.push({ type: "SELL", date: s.createdAt, data: s })
+//     );
+
+//     timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+//     /* ===== PROCESS TRANSACTIONS ===== */
+//     let runningGold = 0;
+//     let slNo = 1;
+//     const rows = [];
+
+//     for (const tx of timeline) {
+//       const goldRate = getGoldRateAtTime(goldRates, tx.date);
+//       const beforeGold = Number(runningGold.toFixed(6));
+
+//       let bought = "", sold = "", coin = "";
+//       let goldCost = "", gst = "", gateway = "", others = "";
+//       let totalAmount = "", thruGateway = "", fromWallet = "";
+//       let txnChargeGms = 0;
+
+//       /* ===== BUY ===== */
+//       if (tx.type === "BUY") {
+//         bought = Number(tx.data.gram_allocated || tx.data.gram || 0);
+//         runningGold += bought;
+
+//         goldCost = tx.data.amount || "";
+//         gst = tx.data.taxAmount || "";
+//         totalAmount = tx.data.totalWithTax || "";
+
+//         txnChargeGms = goldRate ? Number(gst) / goldRate : 0;
+//         runningGold -= txnChargeGms;
+//       }
+
+//       /* ===== COIN ===== */
+//       if (tx.type === "COIN") {
+//         coin = (tx.data.items || []).reduce(
+//           (s, i) => s + Number(i.coinGrams || 0) * Number(i.quantity || 1),
+//           0
+//         );
+
+//         runningGold -= coin;
+
+//         gst = tx.data.taxAmount || "";
+//         others = tx.data.deliveryCharge || tx.data.deliveryCharges || "";
+
+//         thruGateway =
+//           tx.data.amountPayable ??
+//           tx.data.AmountPayable ??
+//           tx.data.totalAmount ??
+//           "";
+
+//         fromWallet =
+//           tx.data.investAmount ??
+//           tx.data.InvestAmount ??
+//           "";
+
+//         totalAmount = thruGateway || "";
+
+//         txnChargeGms = goldRate
+//           ? (Number(gst) + Number(others)) / goldRate
+//           : 0;
+
+//         runningGold -= txnChargeGms;
+//       }
+
+//       /* ===== SELL ===== */
+//       if (tx.type === "SELL") {
+//         sold = Number(tx.data.gram || 0);
+//         runningGold -= sold;
+
+//         goldCost = tx.data.amount || "";
+//         gst = tx.data.taxAmount || "";
+//         gateway = tx.data.paymentGatewayCharges || "";
+//         others = tx.data.deliveryCharges || "";
+
+//         const totalDeduction =
+//           Number(gst) + Number(gateway) + Number(others);
+
+//         txnChargeGms = goldRate ? totalDeduction / goldRate : 0;
+//         runningGold -= txnChargeGms;
+//       }
+
+//       rows.push({
+//         slNo: slNo++,
+//         date: new Date(tx.date).toLocaleDateString("en-IN"),
+//         time: new Date(tx.date).toLocaleTimeString("en-IN"),
+//         goldRate,
+//         availableBefore: beforeGold,
+//         bought,
+//         sold,
+//         coin,
+//         goldCost,
+//         gst,
+//         gateway,
+//         others,
+//         totalAmount,
+//         thruGateway,
+//         fromWallet,
+//         chargesGms: txnChargeGms.toFixed(6),
+//         availableAfter: Number(runningGold.toFixed(6))
+//       });
+//     }
+
+//     /* ===== EXCEL ===== */
+//     const workbook = new ExcelJS.Workbook();
+//     const sheet = workbook.addWorksheet("Transaction Report");
+
+//     const customerRow = sheet.addRow([`Customer Name : ${customerName}`]);
+//     customerRow.getCell(1).font = { bold: true };
+//     applyBorder(customerRow.getCell(1));
+
+//     const mobileRow = sheet.addRow([`Mobile Number : ${mobile}`]);
+//     mobileRow.getCell(1).font = { bold: true };
+//     applyBorder(mobileRow.getCell(1));
+
+//     sheet.addRow([]);
+
+//     const headerRow = sheet.addRow([
+//       "Sl No","Date","Time","Gold rate per gm",
+//       "Available Gold before","Bought in Gms","Sold in Gms",
+//       "Coin Purchased in Gms","Gold Cost","GST",
+//       "Gateway Charges","Others","Total Amount",
+//       "Thru Payment Gateway","From Wallet",
+//       "Transactional charges in Gms","Available Gold after"
+//     ]);
+
+//     headerRow.eachCell(cell => {
+//       cell.font = { bold: true, color: { argb: "FFFFFF" } };
+//       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "4472C4" } };
+//       cell.alignment = { horizontal: "center" };
+//       applyBorder(cell);
+//     });
+
+//     rows.forEach(r => {
+//       const row = sheet.addRow(Object.values(r));
+//       row.eachCell(cell => {
+//         cell.alignment = { horizontal: "center" };
+//         applyBorder(cell);
+//       });
+//     });
+
+//     sheet.columns.forEach(c => (c.width = 22));
+
+//     res.setHeader(
+//       "Content-Disposition",
+//       `attachment; filename=transaction_report_${customerName}.xlsx`
+//     );
+//     res.setHeader(
+//       "Content-Type",
+//       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+//     );
+
+//     await workbook.xlsx.write(res);
+//     res.end();
+
+//   } catch (err) {
+//     console.error("generateTransactionReport error:", err);
+//     res.status(500).json({ message: "Report generation failed" });
+//   }
+// };
+
 const IST_OFFSET = 5.5 * 60 * 60 * 1000;
 
 /* ===== IST DATE → UTC RANGE ===== */
@@ -889,11 +1122,10 @@ const generateTransactionReport = async (req, res) => {
     /* ===== FETCH DATA ===== */
     const [payments, coinPayments, sellPayments, goldRates] =
       await Promise.all([
-        Payment.find({ mobile, ...dateFilter }).lean(),
-        CoinPayment.find({ mobileNumber: mobile, ...dateFilter }).lean(),
-        SellPayment.find({ mobileNumber: mobile, ...dateFilter }).lean(),
+        Payment.find({ mobile, ...dateFilter, status: "Payment Confirmed" }).lean(),
+        CoinPayment.find({ mobileNumber: mobile, ...dateFilter, status: "Payment Confirmed" }).lean(),
+        SellPayment.find({ mobileNumber: mobile, ...dateFilter, paymentStatus: "Approve Confirmed" }).lean(),
 
-        // GoldPrice uses timestamp (seconds)
         GoldPrice.find().sort({ timestamp: 1 }).lean() // oldest → newest
       ]);
 
@@ -929,8 +1161,19 @@ const generateTransactionReport = async (req, res) => {
 
     timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    /* ===== PROCESS TRANSACTIONS ===== */
+    /* ===== INITIAL WALLET (FROM FIRST BUY SNAPSHOT) ===== */
     let runningGold = 0;
+    let runningAmount = 0;
+
+    const firstBuy = payments
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))[0];
+
+    if (firstBuy) {
+      runningGold = Number(firstBuy.totalGrams || firstBuy.gold || 0);
+      runningAmount = Number(firstBuy.totalAmount || 0);
+    }
+
+    /* ===== PROCESS TRANSACTIONS ===== */
     let slNo = 1;
     const rows = [];
 
@@ -941,68 +1184,80 @@ const generateTransactionReport = async (req, res) => {
       let bought = "", sold = "", coin = "";
       let goldCost = "", gst = "", gateway = "", others = "";
       let totalAmount = "", thruGateway = "", fromWallet = "";
-      let txnChargeGms = 0;
+      let txnChargeGms = "";
 
       /* ===== BUY ===== */
       if (tx.type === "BUY") {
         bought = Number(tx.data.gram_allocated || tx.data.gram || 0);
+
         runningGold += bought;
+        runningAmount += Number(tx.data.amount || 0);
 
         goldCost = tx.data.amount || "";
         gst = tx.data.taxAmount || "";
         totalAmount = tx.data.totalWithTax || "";
-
-        txnChargeGms = goldRate ? Number(gst) / goldRate : 0;
-        runningGold -= txnChargeGms;
       }
 
-      /* ===== COIN ===== */
+      /* ===== COIN (PROPORTIONAL WALLET REDUCTION) ===== */
       if (tx.type === "COIN") {
+        const invest = Number(tx.data.investAmount || 0);
+
         coin = (tx.data.items || []).reduce(
           (s, i) => s + Number(i.coinGrams || 0) * Number(i.quantity || 1),
           0
         );
 
-        runningGold -= coin;
+        const oldAmt = runningAmount;
+        const newAmt = Math.max(0, oldAmt - invest);
+
+        if (oldAmt > 0) {
+          runningGold = Number((runningGold * (newAmt / oldAmt)).toFixed(6));
+        } else {
+          runningGold = 0;
+        }
+
+        runningAmount = newAmt;
 
         gst = tx.data.taxAmount || "";
-        others = tx.data.deliveryCharge || tx.data.deliveryCharges || "";
+        others = tx.data.deliveryCharge || "";
 
-        thruGateway =
-          tx.data.amountPayable ??
-          tx.data.AmountPayable ??
-          tx.data.totalAmount ??
-          "";
-
-        fromWallet =
-          tx.data.investAmount ??
-          tx.data.InvestAmount ??
-          "";
-
+        thruGateway = tx.data.amountPayable || "";
+        fromWallet = invest || "";
         totalAmount = thruGateway || "";
-
-        txnChargeGms = goldRate
-          ? (Number(gst) + Number(others)) / goldRate
-          : 0;
-
-        runningGold -= txnChargeGms;
       }
 
-      /* ===== SELL ===== */
+      /* ===== SELL (PROPORTIONAL WALLET REDUCTION) ===== */
       if (tx.type === "SELL") {
         sold = Number(tx.data.gram || 0);
-        runningGold -= sold;
+
+        const totalDeduction =
+          Number(tx.data.amount || 0) +
+          Number(tx.data.taxAmount || 0) +
+          Number(tx.data.paymentGatewayCharges || 0) +
+          Number(tx.data.deliveryCharges || 0);
+
+        const oldAmt = runningAmount;
+        const newAmt = Math.max(0, oldAmt - totalDeduction);
+
+        if (oldAmt > 0) {
+          runningGold = Number((runningGold * (newAmt / oldAmt)).toFixed(6));
+        } else {
+          runningGold = 0;
+        }
+
+        runningAmount = newAmt;
 
         goldCost = tx.data.amount || "";
         gst = tx.data.taxAmount || "";
         gateway = tx.data.paymentGatewayCharges || "";
         others = tx.data.deliveryCharges || "";
 
-        const totalDeduction =
-          Number(gst) + Number(gateway) + Number(others);
+        const chargeOnly =
+          Number(tx.data.taxAmount || 0) +
+          Number(tx.data.paymentGatewayCharges || 0) +
+          Number(tx.data.deliveryCharges || 0);
 
-        txnChargeGms = goldRate ? totalDeduction / goldRate : 0;
-        runningGold -= txnChargeGms;
+        txnChargeGms = goldRate ? (chargeOnly / goldRate).toFixed(6) : "";
       }
 
       rows.push({
@@ -1021,7 +1276,7 @@ const generateTransactionReport = async (req, res) => {
         totalAmount,
         thruGateway,
         fromWallet,
-        chargesGms: txnChargeGms.toFixed(6),
+        chargesGms: txnChargeGms,
         availableAfter: Number(runningGold.toFixed(6))
       });
     }
@@ -1102,3 +1357,6 @@ module.exports = {
     generateSellPaymentHistoryReport,
     generateTransactionReport,
 };
+
+
+
