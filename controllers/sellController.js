@@ -1261,15 +1261,22 @@ const generateTransactionReport = async (req, res) => {
         totalAmount = tx.data.totalWithTax || "";
       }
 
-      /* ===== COIN ===== */
+            /* ===== COIN ===== */
       if (tx.type === "COIN") {
-        const invest = Number(tx.data.investAmount || 0);
 
         coin = (tx.data.items || []).reduce(
           (s, i) => s + Number(i.coinGrams || 0) * Number(i.quantity || 1),
           0
         );
 
+        const goldRateAtTx = Number(goldRate || 0);
+        const goldCostAmt = goldRateAtTx ? Number((coin * goldRateAtTx).toFixed(2)) : 0;
+
+        const tax = Number(tx.data.taxAmount || 0);
+        const delivery = Number(tx.data.deliveryCharge || 0);
+        const invest = Number(tx.data.investAmount || 0);
+
+        // proportional wallet reduction (your existing logic)
         const oldAmt = runningAmount;
         const newAmt = Math.max(0, oldAmt - invest);
 
@@ -1278,14 +1285,17 @@ const generateTransactionReport = async (req, res) => {
         } else {
           runningGold = 0;
         }
-
         runningAmount = newAmt;
 
-        gst = tx.data.taxAmount || "";
-        others = tx.data.deliveryCharge || "";
-        thruGateway = tx.data.amountPayable || "";
+        goldCost = goldCostAmt || "";
+        gst = tax || "";
+        others = delivery || "";
+
+        thruGateway = Number(tx.data.amountPayable || 0) || "";
         fromWallet = invest || "";
-        totalAmount = thruGateway || "";
+
+        // ✅ total = gold value + tax + delivery
+        totalAmount = (goldCostAmt + tax + delivery) || "";
       }
 
       /* ===== SELL ===== */
