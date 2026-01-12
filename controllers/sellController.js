@@ -851,20 +851,20 @@ const getGoldRateAtTime = (rates, date) => {
 //     res.status(500).json({ message: "Report generation failed" });
 //   }
 // };
-
 const IST_OFFSET = 5.5 * 60 * 60 * 1000;
 
+/* ===== IST DATE → UTC RANGE ===== */
 const istDateRangeToUTC = (start, end) => {
-  const startIST = new Date(start);
-  startIST.setHours(0, 0, 0, 0);
+  const s = new Date(start);
+  s.setHours(0, 0, 0, 0);
 
-  const endIST = new Date(end);
-  endIST.setHours(23, 59, 59, 999);
+  const e = new Date(end);
+  e.setHours(23, 59, 59, 999);
 
-  const startUTC = new Date(startIST.getTime() - IST_OFFSET);
-  const endUTC = new Date(endIST.getTime() - IST_OFFSET);
-
-  return { startUTC, endUTC };
+  return {
+    startUTC: new Date(s.getTime() - IST_OFFSET),
+    endUTC: new Date(e.getTime() - IST_OFFSET)
+  };
 };
 
 const generateTransactionReport = async (req, res) => {
@@ -875,14 +875,14 @@ const generateTransactionReport = async (req, res) => {
       return res.status(400).json({ message: "mobile is required" });
     }
 
-    /* ===== IST DATE FILTER ===== */
+    /* ===== DATE FILTER (IST) ===== */
     const dateFilter = {};
     if (start_date && end_date) {
       const { startUTC, endUTC } = istDateRangeToUTC(start_date, end_date);
       dateFilter.createdAt = { $gte: startUTC, $lte: endUTC };
     }
 
-    /* ===== FETCH CUSTOMER ===== */
+    /* ===== CUSTOMER ===== */
     const user = await User.findOne({ mobile }).lean();
     const customerName = user?.name || "N/A";
 
@@ -892,25 +892,26 @@ const generateTransactionReport = async (req, res) => {
         Payment.find({ mobile, ...dateFilter }).lean(),
         CoinPayment.find({ mobileNumber: mobile, ...dateFilter }).lean(),
         SellPayment.find({ mobileNumber: mobile, ...dateFilter }).lean(),
+
+        // GoldPrice uses timestamp (seconds)
         GoldPrice.find().sort({ timestamp: 1 }).lean() // oldest → newest
       ]);
 
-    /* ===== GOLD RATE HELPER ===== */
-    const getGoldRateAtTime = (rates, date) => {
-      if (!rates.length) return "";
+    /* ===== GOLD RATE MATCH (HISTORICAL) ===== */
+    const getGoldRateAtTime = (rates, txDate) => {
+      if (!rates || !rates.length) return "";
 
-      const txTime = new Date(date).getTime();
-      let lastRate = rates[0];
+      const txSec = Math.floor(new Date(txDate).getTime() / 1000);
 
+      let match = null;
       for (const r of rates) {
-        const rateTime = r.createdAt
-          ? new Date(r.createdAt).getTime()
-          : new Date(r.timestamp * 1000).getTime();
-
-        if (rateTime <= txTime) lastRate = r;
+        if (Number(r.timestamp) <= txSec) match = r;
         else break;
       }
-      return lastRate?.price || lastRate?.rate || "";
+
+      if (!match) match = rates[rates.length - 1];
+
+      return match.price_gram_24k || "";
     };
 
     /* ===== MERGE TIMELINE ===== */
@@ -928,7 +929,7 @@ const generateTransactionReport = async (req, res) => {
 
     timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    /* ===== PROCESS ===== */
+    /* ===== PROCESS TRANSACTIONS ===== */
     let runningGold = 0;
     let slNo = 1;
     const rows = [];
@@ -965,11 +966,20 @@ const generateTransactionReport = async (req, res) => {
         runningGold -= coin;
 
         gst = tx.data.taxAmount || "";
-        others = tx.data.deliveryCharge || "";
-        totalAmount = tx.data.amountPayable || "";
+        others = tx.data.deliveryCharge || tx.data.deliveryCharges || "";
 
-        thruGateway = tx.data.amountPayable || ""; // gateway
-        fromWallet = tx.data.investAmount || "";   // wallet
+        thruGateway =
+          tx.data.amountPayable ??
+          tx.data.AmountPayable ??
+          tx.data.totalAmount ??
+          "";
+
+        fromWallet =
+          tx.data.investAmount ??
+          tx.data.InvestAmount ??
+          "";
+
+        totalAmount = thruGateway || "";
 
         txnChargeGms = goldRate
           ? (Number(gst) + Number(others)) / goldRate
@@ -992,7 +1002,6 @@ const generateTransactionReport = async (req, res) => {
           Number(gst) + Number(gateway) + Number(others);
 
         txnChargeGms = goldRate ? totalDeduction / goldRate : 0;
-
         runningGold -= txnChargeGms;
       }
 
@@ -1074,6 +1083,8 @@ const generateTransactionReport = async (req, res) => {
     res.status(500).json({ message: "Report generation failed" });
   }
 };
+
+
 
 
 
