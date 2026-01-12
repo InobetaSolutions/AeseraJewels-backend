@@ -1206,55 +1206,37 @@ const generateTransactionReport = async (req, res) => {
         Payment.find({ mobile, ...dateFilter, status: "Payment Confirmed" }).lean(),
         CoinPayment.find({ mobileNumber: mobile, ...dateFilter, status: "Payment Confirmed" }).lean(),
         SellPayment.find({ mobileNumber: mobile, ...dateFilter, paymentStatus: "Approve Confirmed" }).lean(),
-
-        GoldPrice.find().sort({ timestamp: 1 }).lean() // oldest → newest
+        GoldPrice.find().sort({ timestamp: 1 }).lean()
       ]);
 
-    /* ===== GOLD RATE MATCH (HISTORICAL) ===== */
+    /* ===== GOLD RATE MATCH ===== */
     const getGoldRateAtTime = (rates, txDate) => {
-      if (!rates || !rates.length) return "";
-
+      if (!rates?.length) return "";
       const txSec = Math.floor(new Date(txDate).getTime() / 1000);
-
       let match = null;
+
       for (const r of rates) {
         if (Number(r.timestamp) <= txSec) match = r;
         else break;
       }
-
       if (!match) match = rates[rates.length - 1];
-
       return match.price_gram_24k || "";
     };
 
     /* ===== MERGE TIMELINE ===== */
     const timeline = [];
 
-    payments.forEach(p =>
-      timeline.push({ type: "BUY", date: p.createdAt, data: p })
-    );
-    coinPayments.forEach(c =>
-      timeline.push({ type: "COIN", date: c.createdAt, data: c })
-    );
-    sellPayments.forEach(s =>
-      timeline.push({ type: "SELL", date: s.createdAt, data: s })
-    );
+    payments.forEach(p => timeline.push({ type: "BUY", date: p.createdAt, data: p }));
+    coinPayments.forEach(c => timeline.push({ type: "COIN", date: c.createdAt, data: c }));
+    sellPayments.forEach(s => timeline.push({ type: "SELL", date: s.createdAt, data: s }));
 
     timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    /* ===== INITIAL WALLET (FROM FIRST BUY SNAPSHOT) ===== */
+    /* ===== WALLET STARTS FROM ZERO ===== */
     let runningGold = 0;
     let runningAmount = 0;
 
-    const firstBuy = payments
-      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))[0];
-
-    if (firstBuy) {
-      runningGold = Number(firstBuy.totalGrams || firstBuy.gold || 0);
-      runningAmount = Number(firstBuy.totalAmount || 0);
-    }
-
-    /* ===== PROCESS TRANSACTIONS ===== */
+    /* ===== PROCESS ===== */
     let slNo = 1;
     const rows = [];
 
@@ -1279,7 +1261,7 @@ const generateTransactionReport = async (req, res) => {
         totalAmount = tx.data.totalWithTax || "";
       }
 
-      /* ===== COIN (PROPORTIONAL WALLET REDUCTION) ===== */
+      /* ===== COIN ===== */
       if (tx.type === "COIN") {
         const invest = Number(tx.data.investAmount || 0);
 
@@ -1301,13 +1283,12 @@ const generateTransactionReport = async (req, res) => {
 
         gst = tx.data.taxAmount || "";
         others = tx.data.deliveryCharge || "";
-
         thruGateway = tx.data.amountPayable || "";
         fromWallet = invest || "";
         totalAmount = thruGateway || "";
       }
 
-      /* ===== SELL (PROPORTIONAL WALLET REDUCTION) ===== */
+      /* ===== SELL ===== */
       if (tx.type === "SELL") {
         sold = Number(tx.data.gram || 0);
 
@@ -1419,6 +1400,7 @@ const generateTransactionReport = async (req, res) => {
     res.status(500).json({ message: "Report generation failed" });
   }
 };
+
 
 
 
