@@ -1289,14 +1289,16 @@ const generateTransactionReport = async (req, res) => {
       }
 
       /* ===== SELL ===== */
+            /* ===== SELL ===== */
       if (tx.type === "SELL") {
         sold = Number(tx.data.gram || 0);
 
-        const totalDeduction =
-          Number(tx.data.amount || 0) +
-          Number(tx.data.taxAmount || 0) +
-          Number(tx.data.paymentGatewayCharges || 0) +
-          Number(tx.data.deliveryCharges || 0);
+        const amount = Number(tx.data.amount || 0);
+        const tax = Number(tx.data.taxAmount || 0);
+        const gatewayCharge = Number(tx.data.paymentGatewayCharges || 0);
+        const delivery = Number(tx.data.deliveryCharges || 0);
+
+        const totalDeduction = amount + tax + gatewayCharge + delivery;
 
         const oldAmt = runningAmount;
         const newAmt = Math.max(0, oldAmt - totalDeduction);
@@ -1309,15 +1311,15 @@ const generateTransactionReport = async (req, res) => {
 
         runningAmount = newAmt;
 
-        goldCost = tx.data.amount || "";
-        gst = tx.data.taxAmount || "";
-        gateway = tx.data.paymentGatewayCharges || "";
-        others = tx.data.deliveryCharges || "";
+        goldCost = amount || "";
+        gst = tax || "";
+        gateway = gatewayCharge || "";
+        others = delivery || "";
 
-        const chargeOnly =
-          Number(tx.data.taxAmount || 0) +
-          Number(tx.data.paymentGatewayCharges || 0) +
-          Number(tx.data.deliveryCharges || 0);
+        // ✅ TOTAL AMOUNT COLUMN
+        totalAmount = totalDeduction || "";
+
+        const chargeOnly = tax + gatewayCharge + delivery;
 
         txnChargeGms = goldRate ? (chargeOnly / goldRate).toFixed(6) : "";
       }
